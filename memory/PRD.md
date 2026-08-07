@@ -38,8 +38,15 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 - Kullanıcı yönetimi + yetki matrisi
 - Test: 31/31 backend, 23/23 frontend geçti
 
+## Güncelleme (2026-06, 2. tur)
+- Beyanname alan seti yenilendi: beyanname no, açılış tarihi, kapanış tarihi, tutar, döviz, **ithalatçı**, gümrük müdürlüğü no, IBKB durumu (DÜZENLENDİ/DÜZENLENMEDİ), destek ödemesi %3 (ALINDI/ALINMADI). Eski alanlar (ihracatçı/alıcı/ülke/fatura no) kaldırıldı.
+- Süre: **kapanış tarihi + 180 gün** (kapanış yoksa açılış + 180).
+- Eşleştirmede aynı döviz seçilirse kur alanı hiç görünmez, tutar birebir kapatılır (kur=1, AYNI_DOVIZ); kur yalnızca farklı dövizlerde, TCMB açılış tarihi kuruyla otomatik gelir (manuel override mümkün).
+- IBKB/Destek filtreleri, raporlarda ithalatçı bazlı özet + IBKB/destek eksik sayaçları, Excel yeni kolonlar.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
+- P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)
 - P1: Excel/CSV ile toplu beyanname & bedel içe aktarma; otomatik eşleştirme önerisi
 - P1: Beyanname/bedel dosya eki (fatura, swift PDF) yükleme
 - P2: Brute-force kilidi, CORS için açık origin listesi, e-posta ile süre uyarı bildirimi, PDF rapor

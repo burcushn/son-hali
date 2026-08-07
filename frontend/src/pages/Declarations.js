@@ -24,8 +24,12 @@ const SURE = {
   YAKLASAN: { label: "SÜRE YAKLAŞIYOR", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800" },
 };
 
-const OK = { label: "ALINDI", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800" };
-const NOK = { label: "ALINMADI", cls: "bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700" };
+const OK_CLS = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800";
+const NOK_CLS = "bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700";
+const IBKB_OK = { label: "DÜZENLENDİ", cls: OK_CLS };
+const IBKB_NOK = { label: "DÜZENLENMEDİ", cls: NOK_CLS };
+const OK = { label: "ALINDI", cls: OK_CLS };
+const NOK = { label: "ALINMADI", cls: NOK_CLS };
 
 export default function Declarations() {
   const { user } = useAuth();
@@ -135,8 +139,8 @@ export default function Declarations() {
           </Button>
         ))}
         <Button variant={ibkb ? "default" : "outline"} className="rounded-sm"
-                data-testid="filter-ibkb" onClick={() => setIbkb(ibkb ? "" : "ALINMADI")}>
-          IBKB Alınmadı
+                data-testid="filter-ibkb" onClick={() => setIbkb(ibkb ? "" : "DUZENLENMEDI")}>
+          IBKB Düzenlenmedi
         </Button>
         <Button variant={destek ? "default" : "outline"} className="rounded-sm"
                 data-testid="filter-destek" onClick={() => setDestek(destek ? "" : "ALINMADI")}>
@@ -191,7 +195,7 @@ export default function Declarations() {
                   {SURE[d.sure_durum] && <div><Badge2 cfg={SURE[d.sure_durum]} testid={`declaration-sure-${d.id}`} /></div>}
                 </td>
                 <td className="px-3 py-2">
-                  <Badge2 cfg={d.ibkb_durum === "ALINDI" ? OK : NOK} testid={`declaration-ibkb-${d.id}`} />
+                  <Badge2 cfg={d.ibkb_durum === "DUZENLENDI" ? IBKB_OK : IBKB_NOK} testid={`declaration-ibkb-${d.id}`} />
                 </td>
                 <td className="px-3 py-2">
                   <div className="mono text-xs mb-1">{fmt(d.destek_tutari, d.doviz)}</div>
@@ -271,7 +275,7 @@ export default function Declarations() {
               <label className="flex items-center gap-2 text-sm border border-border rounded-sm px-3 h-10">
                 <input type="checkbox" checked={!!form.ibkb_alindi} data-testid="declaration-ibkb-checkbox"
                        onChange={(e) => setForm({ ...form, ibkb_alindi: e.target.checked })} />
-                IBKB belgesi alındı
+                IBKB belgesi düzenlendi
               </label>
               <label className="flex items-center gap-2 text-sm border border-border rounded-sm px-3 h-10">
                 <input type="checkbox" checked={!!form.destek_alindi} data-testid="declaration-destek-checkbox"

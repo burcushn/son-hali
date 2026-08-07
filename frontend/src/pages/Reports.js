@@ -116,7 +116,7 @@ export default function Reports() {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="border border-border bg-card rounded-sm p-4">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">IBKB Belgesi Alınmayan</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">IBKB Belgesi Düzenlenmeyen</div>
               <div className="mono text-3xl font-semibold mt-2" data-testid="report-ibkb-missing">
                 {d.ibkb_alinmadi}
               </div>

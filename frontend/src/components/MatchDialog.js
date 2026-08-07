@@ -132,7 +132,7 @@ export const MatchDialog = ({ declaration, open, onOpenChange, onChanged }) => {
             <span className="font-semibold text-foreground mono" data-testid="match-remaining">
               {fmt(kalan, declaration.doviz)}
             </span>
-            {" · "}Kur: GB tescil tarihi ({fmtDate(declaration.tescil_tarihi)}) TCMB kuru
+            {" · "}Farklı dövizde kur, beyanname açılış tarihi ({fmtDate(declaration.acilis_tarihi)}) TCMB kurundan alınır
           </DialogDescription>
         </DialogHeader>
 

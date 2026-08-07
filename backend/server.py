@@ -99,7 +99,7 @@ def declaration_view(doc: dict) -> dict:
     d = Declaration.from_mongo(doc).model_dump()
     d["kalan"] = round(d["tutar"] - d["kapatilan"], 2)
     d["destek_tutari"] = round(d["tutar"] * 0.03, 2)
-    d["ibkb_durum"] = "ALINDI" if d.get("ibkb_alindi") else "ALINMADI"
+    d["ibkb_durum"] = "DUZENLENDI" if d.get("ibkb_alindi") else "DUZENLENMEDI"
     d["destek_durum"] = "ALINDI" if d.get("destek_alindi") else "ALINMADI"
     base = d.get("kapanis_tarihi") or d.get("acilis_tarihi") or ""
     try:
@@ -509,7 +509,7 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
     ws.title = "Banka Bildirimi"
     headers = ["Beyanname No", "Açılış Tarihi", "Kapanış Tarihi", "Son Kapatma Tarihi (180 gün)",
                "İthalatçı", "Gümrük Müdürlüğü No", "Döviz", "Beyanname/Fatura Tutarı",
-               "Kapatılan", "Kalan", "Durum", "Süre Durumu", "IBKB Belgesi",
+               "Kapatılan", "Kalan", "Durum", "Süre Durumu", "IBKB Belgesi Durumu",
                "Destek Ödemesi (%3)", "Destek Durumu"]
     ws.append(headers)
     for d in decs:
@@ -564,7 +564,7 @@ async def reports_summary(user: dict = Depends(get_current_user)):
         m = by_month.setdefault(ay, {"ay": ay, "tutar": 0, "kapatilan": 0})
         m["tutar"] = round(m["tutar"] + d["tutar"], 2)
         m["kapatilan"] = round(m["kapatilan"] + d["kapatilan"], 2)
-        if d["ibkb_durum"] == "ALINMADI":
+        if d["ibkb_durum"] == "DUZENLENMEDI":
             ibkb_alinmadi += 1
         if d["destek_durum"] == "ALINMADI":
             destek_alinmadi += 1
