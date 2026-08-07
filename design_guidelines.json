@@ -1,0 +1,131 @@
+{
+  "theme": "light_and_dark_toggle",
+  "default_theme": "light",
+  "typography": {
+    "headings": {
+      "font_family": "Outfit",
+      "forbidden_fonts": ["Inter", "Space Grotesk", "Roboto", "Lato", "Open Sans"],
+      "weights": ["font-medium", "font-semibold", "font-bold"],
+      "sizes": {
+        "h1": "text-3xl sm:text-4xl",
+        "h2": "text-2xl sm:text-3xl",
+        "h3": "text-xl sm:text-2xl",
+        "h4": "text-lg sm:text-xl"
+      },
+      "spacing": "tracking-tight"
+    },
+    "body": {
+      "font_family": "IBM Plex Sans",
+      "sizes": {
+        "default": "text-sm",
+        "small": "text-xs",
+        "large": "text-base"
+      },
+      "line_height": "leading-relaxed"
+    },
+    "financial_data": {
+      "font_family": "JetBrains Mono",
+      "usage": "Use monospace fonts for all currency, dates, and identification numbers (beyanname numarası) for tabular alignment."
+    }
+  },
+  "colors": {
+    "archetype": "SWISS & HIGH-CONTRAST (Authority, Clarity, Truth)",
+    "primary": {
+      "light": "#4338CA", 
+      "dark": "#6366F1",
+      "description": "Deep Indigo - strictly avoid Teal/Teal Blue."
+    },
+    "base": {
+      "light": "#FAFAFA",
+      "dark": "#09090B"
+    },
+    "surface": {
+      "light": "#FFFFFF",
+      "dark": "#18181B"
+    },
+    "borders": {
+      "light": "#E4E4E7",
+      "dark": "#27272A"
+    },
+    "status": {
+      "open": {
+        "bg": "bg-zinc-100 dark:bg-zinc-800",
+        "text": "text-zinc-800 dark:text-zinc-200",
+        "border": "border-zinc-300 dark:border-zinc-700"
+      },
+      "partial": {
+        "bg": "bg-amber-50 dark:bg-amber-950",
+        "text": "text-amber-700 dark:text-amber-400",
+        "border": "border-amber-200 dark:border-amber-800"
+      },
+      "closed": {
+        "bg": "bg-emerald-50 dark:bg-emerald-950",
+        "text": "text-emerald-700 dark:text-emerald-400",
+        "border": "border-emerald-200 dark:border-emerald-800"
+      },
+      "overdue_180_days": {
+        "bg": "bg-red-50 dark:bg-red-950",
+        "text": "text-red-700 dark:text-red-400",
+        "border": "border-red-200 dark:border-red-800"
+      }
+    },
+    "forbidden_colors": ["#7351B7", "#1B93A4"]
+  },
+  "visual_enhancers": {
+    "surfaces": "GRID BORDERS (The Technical Look). Flat backgrounds, 1px subtle borders, no shadows on base items.",
+    "rounding": "rounded-sm or completely square (rounded-none). Avoid heavy roundness in dense financial apps.",
+    "glassmorphism": "Used only for floating sticky headers or modals. Must include 1px inner stroke and backdrop-blur-xl."
+  },
+  "components": {
+    "tables": "High density. Use Shadcn Table. Row height max h-10. Text size text-sm. Sticky headers with solid background. Monospace fonts for numbers.",
+    "buttons": "Sharp edges (rounded-sm). Primary action gets solid Indigo background, secondary actions get outline or ghost styles. Hover states must be distinctly visible.",
+    "modals": "Use Shadcn Dialog for 'Eşleştirme' (Matching) workflows. Must be large enough to show split tables (available payment vs declaration).",
+    "alerts_toasts": "Use Sonner for toast notifications (success/error on matching or Excel export).",
+    "badges": "Pill-shaped (rounded-full) or sharp (rounded-sm) with dot indicators for statuses (AÇIK, KISMİ, KAPALI)."
+  },
+  "grids_and_layouts": {
+    "dashboard_kpis": "Bento Grid Mode B. grid-cols-1 md:grid-cols-2 lg:grid-cols-4. gap-4 or gap-6. Direct children only.",
+    "spacing": "Tight padding inside data-dense containers (p-4), generous padding for main layout wrappers (p-6 or p-8).",
+    "alignment": "Financial figures right-aligned. Text left-aligned. Headers left-aligned."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Tables rows must have subtle hover background changes (e.g., hover:bg-zinc-50 dark:hover:bg-zinc-800/50).",
+    "transitions": "Specific transitions only. Use transition-colors duration-200 for buttons. Avoid universal transition-all.",
+    "modals": "Subtle scale and fade-in (Framer Motion or standard Shadcn dialog animation)."
+  },
+  "accessibility": {
+    "contrast": "Strict adherence to APCA contrast standards. High contrast mode default.",
+    "data_testid": "ALL interactive elements and key text MUST include data-testid attributes (e.g., data-testid='match-save-button', data-testid='export-excel-button', data-testid='declaration-status-badge')."
+  },
+  "media": {
+    "login_background": {
+      "url": "https://images.unsplash.com/photo-1576831371356-d6e9411ae501?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwzfHxtaW5pbWFsaXN0JTIwY29ycG9yYXRlJTIwYXJjaGl0ZWN0dXJlfGVufDB8fHx8MTc4NjEzMjMxMHww&ixlib=rb-4.1.0&q=85",
+      "description": "Minimalist corporate architecture closeup. To be used as a half-screen or background image with an overlay for the login page."
+    }
+  },
+  "3d_libraries": {
+    "usage": "None recommended for this high-density financial compliance app to maintain maximum performance and clarity.",
+    "charts": "Use Recharts (via Shadcn) for basic dashboard KPI visualizations."
+  },
+  "instructions_to_main_agent": [
+    "You are building a dense, data-heavy enterprise dashboard for Turkish export operations personnel. Language must be strictly Turkish.",
+    "Set up standard React + Tailwind + Shadcn UI stack using .js files (no TypeScript).",
+    "Install specific fonts: @fontsource/outfit, @fontsource/ibm-plex-sans, @fontsource/jetbrains-mono.",
+    "Install Phosphor Icons or Lucide Icons for dashboard symbols.",
+    "Build a sidebar layout containing: Dashboard, Beyanname Yönetimi, Bedel Yönetimi, Hareket Geçmişi, Raporlar.",
+    "Implement the 'Eşleştirme' (Matching) modal meticulously. It needs to present two distinct data blocks (Beyanname vs Bank Bedel) and input for matching amounts.",
+    "Prioritize optical alignment, especially in data tables. Financial figures must align right, with monospaced fonts.",
+    "DO NOT apply generic gradients. Color usage must be functional (Red for overdue, Yellow for pending, Green for completed, Indigo for actions).",
+    "Ensure 'data-testid' attributes are attached to all actionable components and significant metric displays for testability."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Do not converge toward generic outputs. Use the highly specific technical/Swiss archetype defined.",
+    "Do not use dark colors as gradients.",
+    "Do not apply 'transition: all' globally; explicitly declare transform and opacity transitions.",
+    "Do not center align the app container. Respect natural reading flow.",
+    "Use pill-shaped or sharp standard buttons with clear hover/focus states.",
+    "Never use AI assistant emojis for icons. Use Phosphor or Lucide icon libraries.",
+    "Use 2-3x more spacing on main layout containers, but tight dense padding in data tables.",
+    "Use 'sonner' for all toast notifications."
+  ]
+}
