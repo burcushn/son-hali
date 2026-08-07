@@ -188,7 +188,7 @@ async def me(user: dict = Depends(get_current_user)):
 
 # ---------------- users ----------------
 @api.get("/users")
-async def list_users(user: dict = Depends(get_current_user)):
+async def list_users(user: dict = Depends(require())):
     docs = await db.users.find({}, {"password_hash": 0}).sort("created_at", 1).to_list(500)
     return [User.from_mongo(d).model_dump() for d in docs]
 
