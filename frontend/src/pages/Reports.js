@@ -1,0 +1,120 @@
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { FileDown } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { api, errMsg, fmt } from "@/lib/apiClient";
+import { PageHeader } from "@/components/Layout";
+import { Button } from "@/components/ui/button";
+
+export default function Reports() {
+  const [d, setD] = useState(null);
+
+  useEffect(() => {
+    api.get("/reports/summary").then(({ data }) => setD(data));
+  }, []);
+
+  const exportExcel = async () => {
+    try {
+      const res = await api.get("/export/excel", { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "banka_bildirim.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Excel indirildi");
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
+
+  return (
+    <div data-testid="reports-page">
+      <PageHeader title="Raporlar" desc="Döviz, ülke ve ay bazlı kapatma özetleri">
+        <Button className="rounded-sm" onClick={exportExcel} data-testid="reports-export-button">
+          <FileDown className="h-4 w-4 mr-1.5" /> Banka Bildirim Excel
+        </Button>
+      </PageHeader>
+
+      {d && (
+        <div className="space-y-4">
+          <div className="border border-border bg-card rounded-sm">
+            <div className="px-4 py-3 border-b border-border font-display font-semibold text-sm">
+              Döviz Bazlı Özet
+            </div>
+            <table className="w-full text-sm" data-testid="report-currency-table">
+              <thead className="bg-secondary/60">
+                <tr className="text-left text-xs uppercase text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">Döviz</th>
+                  <th className="px-4 py-2 font-medium text-right">Adet</th>
+                  <th className="px-4 py-2 font-medium text-right">Toplam</th>
+                  <th className="px-4 py-2 font-medium text-right">Kapatılan</th>
+                  <th className="px-4 py-2 font-medium text-right">Kalan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.doviz.map((r) => (
+                  <tr key={r.doviz} className="border-t border-border hover:bg-secondary/50 transition-colors duration-200">
+                    <td className="px-4 py-2 mono font-medium">{r.doviz}</td>
+                    <td className="px-4 py-2 mono text-right">{r.adet}</td>
+                    <td className="px-4 py-2 mono text-right">{fmt(r.tutar)}</td>
+                    <td className="px-4 py-2 mono text-right">{fmt(r.kapatilan)}</td>
+                    <td className="px-4 py-2 mono text-right font-semibold">{fmt(r.kalan)}</td>
+                  </tr>
+                ))}
+                {!d.doviz.length && (
+                  <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">Veri yok.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-4">
+            <div className="border border-border bg-card rounded-sm p-4">
+              <div className="font-display font-semibold text-sm mb-4">Aylık Beyanname / Kapatma</div>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={d.ay}>
+                    <CartesianGrid strokeDasharray="2 2" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="ay" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 2, fontSize: 12 }} />
+                    <Bar dataKey="tutar" fill="hsl(var(--primary))" name="Beyanname" />
+                    <Bar dataKey="kapatilan" fill="#10b981" name="Kapatılan" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="border border-border bg-card rounded-sm">
+              <div className="px-4 py-3 border-b border-border font-display font-semibold text-sm">
+                Ülke Bazlı Açık Kalan
+              </div>
+              <table className="w-full text-sm" data-testid="report-country-table">
+                <thead className="bg-secondary/60">
+                  <tr className="text-left text-xs uppercase text-muted-foreground">
+                    <th className="px-4 py-2 font-medium">Ülke</th>
+                    <th className="px-4 py-2 font-medium text-right">Adet</th>
+                    <th className="px-4 py-2 font-medium text-right">Kalan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.ulke.map((r) => (
+                    <tr key={r.ulke} className="border-t border-border hover:bg-secondary/50 transition-colors duration-200">
+                      <td className="px-4 py-2">{r.ulke}</td>
+                      <td className="px-4 py-2 mono text-right">{r.adet}</td>
+                      <td className="px-4 py-2 mono text-right font-semibold">{fmt(r.kalan)}</td>
+                    </tr>
+                  ))}
+                  {!d.ulke.length && (
+                    <tr><td colSpan={3} className="px-4 py-10 text-center text-muted-foreground">Veri yok.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

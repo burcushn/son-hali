@@ -1,0 +1,124 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ShieldCheck, Loader2 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { errMsg } from "@/lib/apiClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+export default function Login() {
+  const { login } = useAuth();
+  const nav = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await login(email, password);
+      nav("/");
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen grid lg:grid-cols-2">
+      <div className="flex items-center px-8 sm:px-16 py-16">
+        <div className="w-full max-w-sm">
+          <div className="flex items-center gap-3 mb-12">
+            <div className="h-9 w-9 bg-primary flex items-center justify-center rounded-sm">
+              <ShieldCheck className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div className="leading-tight">
+              <div className="font-display font-semibold text-sm">İHRACAT BEDELİ</div>
+              <div className="text-[10px] tracking-widest text-muted-foreground uppercase">
+                Kapatma & Banka Bildirim Sistemi
+              </div>
+            </div>
+          </div>
+
+          <h1 className="text-3xl font-semibold mb-2">Oturum Aç</h1>
+          <p className="text-sm text-muted-foreground mb-8">
+            Operasyon paneline erişmek için giriş yapın.
+          </p>
+
+          <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wide">E-posta</Label>
+              <Input
+                type="email"
+                required
+                data-testid="login-email-input"
+                className="rounded-sm h-11"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="ad@firma.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wide">Şifre</Label>
+              <Input
+                type="password"
+                required
+                data-testid="login-password-input"
+                className="rounded-sm h-11"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
+            {error && (
+              <div
+                data-testid="login-error"
+                className="text-sm text-destructive border border-destructive/30 bg-destructive/5 px-3 py-2 rounded-sm"
+              >
+                {error}
+              </div>
+            )}
+            <Button
+              type="submit"
+              disabled={busy}
+              data-testid="login-submit-button"
+              className="w-full h-11 rounded-sm transition-colors duration-200"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Giriş Yap"}
+            </Button>
+          </form>
+
+          <div className="mt-10 border border-border rounded-sm p-4 text-xs text-muted-foreground space-y-1">
+            <div className="font-medium text-foreground mb-1">Demo hesaplar (şifre: Test1234!)</div>
+            <div className="mono">ihracat@ihracat.com — İhracat Personeli</div>
+            <div className="mono">banka@ihracat.com — Banka Personeli</div>
+            <div className="mono">sef@ihracat.com — Onaylayan (Şef)</div>
+            <div className="mono">admin@ihracat.com — Admin / Admin1234!</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="hidden lg:block relative border-l border-border">
+        <img
+          src="https://images.unsplash.com/photo-1576831371356-d6e9411ae501?crop=entropy&cs=srgb&fm=jpg&q=85&w=1400"
+          alt="Kurumsal mimari"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-[#1a1a2e]/80" />
+        <div className="absolute bottom-0 p-12 text-white">
+          <div className="text-xs tracking-[0.25em] uppercase opacity-70 mb-3">
+            Dış Ticaret Operasyon
+          </div>
+          <div className="font-display text-3xl font-semibold leading-tight max-w-md">
+            Beyanname ve ihracat bedellerini TCMB kuruyla eşleştirin, banka bildirimini tek tıkla hazırlayın.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

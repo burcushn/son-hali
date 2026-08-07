@@ -1,56 +1,53 @@
-import { useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Layout } from "@/components/Layout";
+import { Toaster } from "@/components/ui/sonner";
+import Login from "@/pages/Login";
+import Dashboard from "@/pages/Dashboard";
+import Declarations from "@/pages/Declarations";
+import Payments from "@/pages/Payments";
+import AuditLog from "@/pages/AuditLog";
+import Reports from "@/pages/Reports";
+import Users from "@/pages/Users";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
+const Protected = ({ children, adminOnly }) => {
+  const { user, loading } = useAuth();
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  if (!user) return <Navigate to="/giris" replace />;
+  if (adminOnly && user.role !== "admin") return <Navigate to="/" replace />;
+  return children;
 };
 
-function App() {
+const Guest = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  return user ? <Navigate to="/" replace /> : children;
+};
+
+export default function App() {
   return (
-    <div className="App">
+    <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
+          <Route path="/giris" element={<Guest><Login /></Guest>} />
+          <Route element={<Protected><Layout /></Protected>}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/beyannameler" element={<Declarations />} />
+            <Route path="/bedeller" element={<Payments />} />
+            <Route path="/hareketler" element={<AuditLog />} />
+            <Route path="/raporlar" element={<Reports />} />
+            <Route path="/kullanicilar" element={<Protected adminOnly><Users /></Protected>} />
           </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
-    </div>
+      <Toaster position="top-right" />
+    </AuthProvider>
   );
 }
-
-export default App;
