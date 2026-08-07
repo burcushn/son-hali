@@ -98,11 +98,16 @@ async def log_action(user: dict, modul: str, islem: str, aciklama: str, ref: str
 def declaration_view(doc: dict) -> dict:
     d = Declaration.from_mongo(doc).model_dump()
     d["kalan"] = round(d["tutar"] - d["kapatilan"], 2)
+    d["destek_tutari"] = round(d["tutar"] * 0.03, 2)
+    d["ibkb_durum"] = "ALINDI" if d.get("ibkb_alindi") else "ALINMADI"
+    d["destek_durum"] = "ALINDI" if d.get("destek_alindi") else "ALINMADI"
+    base = d.get("kapanis_tarihi") or d.get("acilis_tarihi") or ""
     try:
-        son = datetime.strptime(d["tescil_tarihi"][:10], "%Y-%m-%d") + timedelta(days=180)
+        son = datetime.strptime(base[:10], "%Y-%m-%d") + timedelta(days=180)
         d["son_kapatma_tarihi"] = son.strftime("%Y-%m-%d")
         kalan_gun = (son.date() - datetime.now().date()).days
     except Exception:
+        d["son_kapatma_tarihi"] = ""
         kalan_gun = None
     d["kalan_gun"] = kalan_gun
     if d["durum"] == "KAPALI":
@@ -233,19 +238,23 @@ async def delete_user(uid: str, user: dict = Depends(require())):
 # ---------------- declarations ----------------
 @api.get("/declarations")
 async def list_declarations(durum: str = "", q: str = "", sure: str = "",
+                            ibkb: str = "", destek: str = "",
                             user: dict = Depends(get_current_user)):
     query = {}
     if durum:
         query["durum"] = durum
     if q:
         query["$or"] = [{"beyanname_no": {"$regex": q, "$options": "i"}},
-                        {"alici": {"$regex": q, "$options": "i"}},
-                        {"ihracatci": {"$regex": q, "$options": "i"}},
-                        {"fatura_no": {"$regex": q, "$options": "i"}}]
-    docs = await db.declarations.find(query).sort("tescil_tarihi", -1).to_list(2000)
+                        {"ithalatci": {"$regex": q, "$options": "i"}},
+                        {"gumruk_mudurlugu_no": {"$regex": q, "$options": "i"}}]
+    docs = await db.declarations.find(query).sort("acilis_tarihi", -1).to_list(2000)
     items = [declaration_view(d) for d in docs]
     if sure:
         items = [i for i in items if i["sure_durum"] == sure]
+    if ibkb:
+        items = [i for i in items if i["ibkb_durum"] == ibkb]
+    if destek:
+        items = [i for i in items if i["destek_durum"] == destek]
     return items
 
 
@@ -376,10 +385,12 @@ async def create_match(body: MatchInput, user: dict = Depends(require("onaylayan
         raise HTTPException(status_code=400,
             detail=f"Beyanname kalan tutarı aşılamaz. Kalan: {d_kalan:,.2f} {d['doviz']}")
 
-    if body.kur:
-        kur, kaynak, kur_tarihi = float(body.kur), "MANUEL", d["tescil_tarihi"][:10]
+    if p["doviz"] == d["doviz"]:
+        kur, kaynak, kur_tarihi = 1.0, "AYNI_DOVIZ", d["acilis_tarihi"][:10]
+    elif body.kur:
+        kur, kaynak, kur_tarihi = float(body.kur), "MANUEL", d["acilis_tarihi"][:10]
     else:
-        kur, kaynak, kur_tarihi = await tcmb.cross_rate(p["doviz"], d["doviz"], d["tescil_tarihi"])
+        kur, kaynak, kur_tarihi = await tcmb.cross_rate(p["doviz"], d["doviz"], d["acilis_tarihi"])
         if kur is None:
             raise HTTPException(status_code=503, detail="TCMB kuru alınamadı, kuru manuel giriniz")
 
@@ -492,19 +503,21 @@ def _style(ws, ncols):
 @api.get("/export/excel")
 async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
     query = {"durum": durum} if durum else {}
-    decs = await db.declarations.find(query).sort("tescil_tarihi", -1).to_list(5000)
+    decs = await db.declarations.find(query).sort("acilis_tarihi", -1).to_list(5000)
     wb = Workbook()
     ws = wb.active
     ws.title = "Banka Bildirimi"
-    headers = ["Beyanname No", "Tescil Tarihi", "Son Kapatma Tarihi", "İhracatçı", "Alıcı",
-               "Ülke", "Fatura No", "Döviz", "Beyanname Tutarı", "Kapatılan", "Kalan",
-               "Durum", "Süre Durumu"]
+    headers = ["Beyanname No", "Açılış Tarihi", "Kapanış Tarihi", "Son Kapatma Tarihi (180 gün)",
+               "İthalatçı", "Gümrük Müdürlüğü No", "Döviz", "Beyanname/Fatura Tutarı",
+               "Kapatılan", "Kalan", "Durum", "Süre Durumu", "IBKB Belgesi",
+               "Destek Ödemesi (%3)", "Destek Durumu"]
     ws.append(headers)
     for d in decs:
         v = declaration_view(d)
-        ws.append([v["beyanname_no"], v["tescil_tarihi"], v["son_kapatma_tarihi"], v["ihracatci"],
-                   v["alici"], v["ulke"], v["fatura_no"], v["doviz"], v["tutar"], v["kapatilan"],
-                   v["kalan"], v["durum"], v["sure_durum"]])
+        ws.append([v["beyanname_no"], v["acilis_tarihi"], v["kapanis_tarihi"], v["son_kapatma_tarihi"],
+                   v["ithalatci"], v["gumruk_mudurlugu_no"], v["doviz"], v["tutar"], v["kapatilan"],
+                   v["kalan"], v["durum"], v["sure_durum"], v["ibkb_durum"],
+                   v["destek_tutari"], v["destek_durum"]])
     _style(ws, len(headers))
 
     ws2 = wb.create_sheet("Eşleştirme Detayı")
@@ -535,22 +548,29 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
 @api.get("/reports/summary")
 async def reports_summary(user: dict = Depends(get_current_user)):
     decs = [declaration_view(d) for d in await db.declarations.find({}).to_list(5000)]
-    by_cur, by_country, by_month = {}, {}, {}
+    by_cur, by_imp, by_month = {}, {}, {}
+    ibkb_alinmadi = destek_alinmadi = 0
     for d in decs:
         c = by_cur.setdefault(d["doviz"], {"doviz": d["doviz"], "tutar": 0, "kapatilan": 0, "kalan": 0, "adet": 0})
         c["tutar"] = round(c["tutar"] + d["tutar"], 2)
         c["kapatilan"] = round(c["kapatilan"] + d["kapatilan"], 2)
         c["kalan"] = round(c["kalan"] + d["kalan"], 2)
         c["adet"] += 1
-        k = by_country.setdefault(d["ulke"] or "-", {"ulke": d["ulke"] or "-", "adet": 0, "kalan": 0})
+        key = d["ithalatci"] or "-"
+        k = by_imp.setdefault(key, {"ithalatci": key, "adet": 0, "kalan": 0})
         k["adet"] += 1
         k["kalan"] = round(k["kalan"] + d["kalan"], 2)
-        ay = d["tescil_tarihi"][:7]
+        ay = (d.get("acilis_tarihi") or "")[:7]
         m = by_month.setdefault(ay, {"ay": ay, "tutar": 0, "kapatilan": 0})
         m["tutar"] = round(m["tutar"] + d["tutar"], 2)
         m["kapatilan"] = round(m["kapatilan"] + d["kapatilan"], 2)
+        if d["ibkb_durum"] == "ALINMADI":
+            ibkb_alinmadi += 1
+        if d["destek_durum"] == "ALINMADI":
+            destek_alinmadi += 1
     return {"doviz": list(by_cur.values()),
-            "ulke": sorted(by_country.values(), key=lambda x: -x["adet"])[:10],
+            "ithalatci": sorted(by_imp.values(), key=lambda x: -x["adet"])[:10],
+            "ibkb_alinmadi": ibkb_alinmadi, "destek_alinmadi": destek_alinmadi,
             "ay": sorted(by_month.values(), key=lambda x: x["ay"])[-12:]}
 
 

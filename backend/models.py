@@ -73,28 +73,29 @@ class LoginInput(BaseModel):
 
 class DeclarationInput(BaseModel):
     beyanname_no: str
-    tescil_tarihi: str
-    ihracatci: str
-    alici: str
-    ulke: str
+    acilis_tarihi: str
+    kapanis_tarihi: Optional[str] = ""
+    ithalatci: str
+    gumruk_mudurlugu_no: Optional[str] = ""
     doviz: str
     tutar: float
-    fatura_no: Optional[str] = ""
+    ibkb_alindi: bool = False
+    destek_alindi: bool = False
     notlar: Optional[str] = ""
 
 
 class Declaration(BaseDocument):
     beyanname_no: str
-    tescil_tarihi: str
-    ihracatci: str
-    alici: str
-    ulke: str
+    acilis_tarihi: str
+    kapanis_tarihi: str = ""
+    ithalatci: str
+    gumruk_mudurlugu_no: str = ""
     doviz: str
     tutar: float
     kapatilan: float = 0.0
-    fatura_no: str = ""
+    ibkb_alindi: bool = False
+    destek_alindi: bool = False
     notlar: str = ""
-    son_kapatma_tarihi: str = ""
     durum: str = "ACIK"
     created_at: str = Field(default_factory=utcnow_iso)
     created_by: str = ""

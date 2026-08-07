@@ -48,13 +48,13 @@ export const MatchDialog = ({ declaration, open, onOpenChange, onChanged }) => {
     setManualRate("");
     const need = Math.max(0, kalan);
     if (p.doviz === declaration.doviz) {
-      setRate({ kur: 1, kaynak: "AYNI_DOVIZ", kur_tarihi: declaration.tescil_tarihi?.slice(0, 10) });
+      setRate({ kur: 1, kaynak: "AYNI_DOVIZ", kur_tarihi: declaration.acilis_tarihi?.slice(0, 10) });
       setAmount(String(Math.min(need, p.bakiye).toFixed(2)));
       return;
     }
     try {
       const { data } = await api.get("/rates", {
-        params: { date: declaration.tescil_tarihi, from_cur: p.doviz, to_cur: declaration.doviz },
+        params: { date: declaration.acilis_tarihi, from_cur: p.doviz, to_cur: declaration.doviz },
       });
       setRate(data);
       setAmount(String(Math.min(need, p.bakiye * data.kur).toFixed(2)));
@@ -64,7 +64,8 @@ export const MatchDialog = ({ declaration, open, onOpenChange, onChanged }) => {
     }
   };
 
-  const effRate = manualRate ? Number(manualRate) : rate?.kur;
+  const sameCur = sel && declaration && sel.doviz === declaration.doviz;
+  const effRate = sameCur ? 1 : manualRate ? Number(manualRate) : rate?.kur;
   const bedelKullanim = effRate && amount ? Number(amount) / effRate : 0;
   const eksik = kalan - Number(amount || 0);
 
@@ -75,7 +76,7 @@ export const MatchDialog = ({ declaration, open, onOpenChange, onChanged }) => {
         declaration_id: declaration.id,
         payment_id: sel.id,
         kapatilan_tutar: Number(amount),
-        kur: manualRate ? Number(manualRate) : null,
+        kur: sel.doviz === declaration.doviz ? 1 : manualRate ? Number(manualRate) : null,
       });
       toast.success("Eşleştirme kaydedildi");
       setSel(null); setAmount(""); setRate(null); setManualRate("");
@@ -196,7 +197,7 @@ export const MatchDialog = ({ declaration, open, onOpenChange, onChanged }) => {
                   Seçilen bedel: <span className="font-medium">{sel.gonderen}</span> —{" "}
                   <span className="mono">{fmt(sel.bakiye, sel.doviz)}</span> bakiye
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className={`grid gap-3 ${sameCur ? "grid-cols-1" : "grid-cols-2"}`}>
                   <div className="space-y-1">
                     <Label className="text-xs">Kapatılacak Tutar ({declaration.doviz})</Label>
                     <Input
@@ -208,34 +209,44 @@ export const MatchDialog = ({ declaration, open, onOpenChange, onChanged }) => {
                       data-testid="match-amount-input"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">
-                      Kur (1 {sel.doviz} = ? {declaration.doviz})
-                    </Label>
-                    <Input
-                      type="number"
-                      step="0.000001"
-                      className="rounded-sm mono"
-                      placeholder={rate ? String(rate.kur) : "TCMB"}
-                      value={manualRate}
-                      onChange={(e) => setManualRate(e.target.value)}
-                      data-testid="match-rate-input"
-                    />
-                  </div>
+                  {!sameCur && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">
+                        Kur (1 {sel.doviz} = ? {declaration.doviz})
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.000001"
+                        className="rounded-sm mono"
+                        placeholder={rate ? String(rate.kur) : "TCMB"}
+                        value={manualRate}
+                        onChange={(e) => setManualRate(e.target.value)}
+                        data-testid="match-rate-input"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="text-xs text-muted-foreground border border-border rounded-sm p-2 space-y-1">
-                  <div>
-                    Kur kaynağı:{" "}
-                    <span className="mono">
-                      {manualRate ? "MANUEL" : rate ? `${rate.kaynak} (${fmtDate(rate.kur_tarihi)})` : "-"}
-                    </span>
-                  </div>
-                  <div>
-                    Bedelden düşecek:{" "}
-                    <span className="mono font-semibold text-foreground" data-testid="match-usage-preview">
-                      {fmt(bedelKullanim, sel.doviz)}
-                    </span>
-                  </div>
+                  {sameCur ? (
+                    <div>
+                      Aynı döviz ({sel.doviz}) — kur kullanılmaz, tutar birebir kapatılır.
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        Kur kaynağı:{" "}
+                        <span className="mono">
+                          {manualRate ? "MANUEL" : rate ? `${rate.kaynak} (${fmtDate(rate.kur_tarihi)})` : "-"}
+                        </span>
+                      </div>
+                      <div>
+                        Bedelden düşecek:{" "}
+                        <span className="mono font-semibold text-foreground" data-testid="match-usage-preview">
+                          {fmt(bedelKullanim, sel.doviz)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div>
                     İşlem sonrası eksik bakiye:{" "}
                     <span

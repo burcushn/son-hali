@@ -88,29 +88,44 @@ export default function Reports() {
 
             <div className="border border-border bg-card rounded-sm">
               <div className="px-4 py-3 border-b border-border font-display font-semibold text-sm">
-                Ülke Bazlı Açık Kalan
+                İthalatçı Bazlı Açık Kalan
               </div>
-              <table className="w-full text-sm" data-testid="report-country-table">
+              <table className="w-full text-sm" data-testid="report-importer-table">
                 <thead className="bg-secondary/60">
                   <tr className="text-left text-xs uppercase text-muted-foreground">
-                    <th className="px-4 py-2 font-medium">Ülke</th>
+                    <th className="px-4 py-2 font-medium">İthalatçı</th>
                     <th className="px-4 py-2 font-medium text-right">Adet</th>
                     <th className="px-4 py-2 font-medium text-right">Kalan</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {d.ulke.map((r) => (
-                    <tr key={r.ulke} className="border-t border-border hover:bg-secondary/50 transition-colors duration-200">
-                      <td className="px-4 py-2">{r.ulke}</td>
+                  {d.ithalatci.map((r) => (
+                    <tr key={r.ithalatci} className="border-t border-border hover:bg-secondary/50 transition-colors duration-200">
+                      <td className="px-4 py-2">{r.ithalatci}</td>
                       <td className="px-4 py-2 mono text-right">{r.adet}</td>
                       <td className="px-4 py-2 mono text-right font-semibold">{fmt(r.kalan)}</td>
                     </tr>
                   ))}
-                  {!d.ulke.length && (
+                  {!d.ithalatci.length && (
                     <tr><td colSpan={3} className="px-4 py-10 text-center text-muted-foreground">Veri yok.</td></tr>
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="border border-border bg-card rounded-sm p-4">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">IBKB Belgesi Alınmayan</div>
+              <div className="mono text-3xl font-semibold mt-2" data-testid="report-ibkb-missing">
+                {d.ibkb_alinmadi}
+              </div>
+            </div>
+            <div className="border border-border bg-card rounded-sm p-4">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Destek Ödemesi (%3) Alınmayan</div>
+              <div className="mono text-3xl font-semibold mt-2" data-testid="report-destek-missing">
+                {d.destek_alinmadi}
+              </div>
             </div>
           </div>
         </div>

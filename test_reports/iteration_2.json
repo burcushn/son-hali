@@ -1,0 +1,39 @@
+{
+  "summary": "Backend + frontend regression after new declaration schema (acilis/kapanis, ithalatci, gumruk, ibkb/destek) and same-currency match rule. Rewrote /app/backend/tests/backend_test.py for new schema; 31/31 pytest pass (auth, RBAC on declarations/payments/matches/users, same-currency kur=1 AYNI_DOVIZ, cross-currency TCMB, over-declaration/over-payment errors, update/delete match recalc, block-delete when matched, dashboard, audit logs, reports summary with ithalatci/ibkb_alinmadi/destek_alinmadi, Excel export with new columns, users admin-only). Frontend verified live at REACT_APP_BACKEND_URL: new declaration form with all new fields + live %3 destek preview (300,00 EUR for 10.000 EUR); son_kapatma date correctly = kapanis+180 (2026-03-15 → 11.09.2026); IBKB/destek badges show ALINMADI; filter-ibkb & filter-destek narrow list correctly; search matches ithalatci/gumruk; MatchDialog same-currency (EUR/EUR) does NOT render match-rate-input and shows 'Aynı döviz ... kur kullanılmaz' info, saves match with kur=1 AYNI_DOVIZ, amount saved 1:1; cross-currency (EUR/USD) renders rate input with TCMB rate 0.858744 fetched automatically and 'Bedelden düşecek' preview computed; Reports page shows report-currency-table, report-importer-table, report-ibkb-missing, report-destek-missing; export-excel-button present; RBAC verified (banka/sef cannot see add-declaration).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/login", "issue": "No brute-force lockout (playbook expects 5-fail temp block)."},
+      {"endpoint": "CORS", "issue": "CORS_ORIGINS defaults to '*' with allow_credentials=True — cookie clients rejected by browsers; Bearer fallback is used."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MatchDialog", "issue": "DialogDescription still references removed field: renders 'GB tescil tarihi ()' because it uses declaration.tescil_tarihi which no longer exists. Should be declaration.acilis_tarihi.", "selector": "match-dialog DialogDescription (MatchDialog.js L135)", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix MatchDialog.js L135: replace declaration.tescil_tarihi with declaration.acilis_tarihi so the header shows the correct kur date."
+  ],
+  "critical_code_review_comments": [
+    "MatchDialog.js still shows 'GB tescil tarihi ({fmtDate(declaration.tescil_tarihi)})' — leftover from old schema; label + variable both need renaming to 'Beyanname açılış tarihi' / acilis_tarihi.",
+    "server.py create_match: when same currency the passed body.kur is silently overridden to 1.0 — good behavior but consider returning 400 if caller sends a non-1 kur, to avoid confusion.",
+    "server.py declaration_view: son_kapatma_tarihi silently becomes '' on unparseable dates; consider validating acilis_tarihi format on input."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (31/31)", "frontend": "100% on tested assertions (rate hidden for same-cur, TCMB auto for cross-cur, %3 destek, son_kapatma=+180, filters, reports, RBAC)"},
+  "seed_data_creation": "Ephemeral UI_TEST_* declaration + EUR/USD payments created and cleaned up via API at end of run.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@ihracat.com/Admin1234!, ihracat@/banka@/sef@/viewer@ihracat.com Test1234!",
+  "context_for_next_testing_agent": "backend_test.py now uses the new schema (acilis_tarihi, kapanis_tarihi, ithalatci, gumruk_mudurlugu_no, ibkb_alindi, destek_alindi). GET /api/users is admin-only. In matches, same-currency call must NOT send kur (or send kur ignored -> kur=1 AYNI_DOVIZ). Cross-currency uses TCMB automatically when kur omitted. Reports summary returns ithalatci list + ibkb_alinmadi + destek_alinmadi counters. Excel export has 15 headers including 'Son Kapatma Tarihi (180 gün)', 'IBKB Belgesi', 'Destek Ödemesi (%3)', 'Destek Durumu'. Frontend public URL: https://trade-settlement-pro.preview.emergentagent.com",
+  "rca_of_the_issue": "MatchDialog leftover uses declaration.tescil_tarihi (undefined in new schema) so the dialog header shows an empty date. Purely cosmetic; core match flow unaffected."
+}
