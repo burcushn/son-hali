@@ -179,7 +179,7 @@ def _issue_session(user: dict, response: Response) -> dict:
     return {**User.from_mongo(u).model_dump(), "token": token}
 
 
-async def _create_challenge(user: dict) -> str:
+async def _create_challenge(user: dict) -> tuple:
     code = f"{secrets.randbelow(1000000):06d}"
     res = await db.login_challenges.insert_one({
         "user_id": str(user["_id"]), "email": user["email"],
@@ -188,8 +188,8 @@ async def _create_challenge(user: dict) -> str:
         "used": False, "created_at": utcnow_iso(),
     })
     logger.info(f"[2FA] {user['email']} doğrulama kodu: {code}")
-    await alerts.send_code(user["email"], user.get("name", ""), code)
-    return str(res.inserted_id)
+    delivered = await alerts.send_code(user["email"], user.get("name", ""), code)
+    return str(res.inserted_id), delivered
 
 
 @api.post("/auth/login")
@@ -197,14 +197,29 @@ async def login(body: LoginInput, response: Response):
     email = body.email.strip().lower()
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user.get("password_hash", "")):
+        if user:
+            fails = user.get("failed_logins", 0) + 1
+            upd = {"failed_logins": fails}
+            if fails >= 5:
+                upd["locked_until"] = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
+            await db.users.update_one({"_id": user["_id"]}, {"$set": upd})
         raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı")
     if not user.get("active", True):
         raise HTTPException(status_code=403, detail="Hesabınız pasif durumda")
+    locked = user.get("locked_until")
+    if locked and datetime.fromisoformat(locked) > datetime.now(timezone.utc):
+        raise HTTPException(status_code=429,
+                            detail="Çok fazla hatalı giriş denemesi. 15 dakika sonra tekrar deneyin.")
+    await db.users.update_one({"_id": user["_id"]},
+                              {"$set": {"failed_logins": 0, "locked_until": None}})
     if not user.get("two_factor", False):
         return _issue_session(user, response)
-    cid = await _create_challenge(user)
-    return {"two_factor": True, "challenge_id": cid, "email": email,
-            "mesaj": "Doğrulama kodu e-posta adresinize gönderildi (5 dakika geçerli)."}
+    cid, delivered = await _create_challenge(user)
+    return {"two_factor": True, "challenge_id": cid, "email": email, "gonderildi": delivered,
+            "mesaj": ("Doğrulama kodu e-posta adresinize gönderildi (5 dakika geçerli)."
+                      if delivered else
+                      "Kod oluşturuldu ancak e-posta gönderilemedi. 'Kodu tekrar gönder' ile "
+                      "yeniden deneyin veya yöneticinizle iletişime geçin.")}
 
 
 @api.post("/auth/verify-code")
@@ -221,7 +236,10 @@ async def verify_code(body: VerifyCodeInput, response: Response):
         raise HTTPException(status_code=429, detail="Çok fazla hatalı deneme, yeni kod isteyin")
     if not verify_password(body.code.strip(), ch["code_hash"]):
         await db.login_challenges.update_one({"_id": ch["_id"]}, {"$inc": {"attempts": 1}})
-        raise HTTPException(status_code=401, detail="Doğrulama kodu hatalı")
+        kalan = 4 - ch.get("attempts", 0)
+        if kalan <= 0:
+            raise HTTPException(status_code=429, detail="Çok fazla hatalı deneme, yeni kod isteyin")
+        raise HTTPException(status_code=401, detail=f"Doğrulama kodu hatalı ({kalan} deneme kaldı)")
     await db.login_challenges.update_one({"_id": ch["_id"]}, {"$set": {"used": True}})
     user = await db.users.find_one({"_id": ObjectId(ch["user_id"])})
     if not user or not user.get("active", True):
@@ -232,14 +250,16 @@ async def verify_code(body: VerifyCodeInput, response: Response):
 @api.post("/auth/resend-code")
 async def resend_code(body: ResendCodeInput):
     ch = await db.login_challenges.find_one({"_id": ObjectId(body.challenge_id)})
-    if not ch:
-        raise HTTPException(status_code=400, detail="Doğrulama isteği geçersiz")
+    if not ch or ch.get("used"):
+        raise HTTPException(status_code=400, detail="Doğrulama isteği geçersiz, tekrar giriş yapın")
     user = await db.users.find_one({"_id": ObjectId(ch["user_id"])})
     if not user:
         raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
     await db.login_challenges.update_one({"_id": ch["_id"]}, {"$set": {"used": True}})
-    cid = await _create_challenge(user)
-    return {"challenge_id": cid, "mesaj": "Yeni doğrulama kodu gönderildi."}
+    cid, delivered = await _create_challenge(user)
+    return {"challenge_id": cid, "gonderildi": delivered,
+            "mesaj": ("Yeni doğrulama kodu gönderildi." if delivered
+                      else "Kod oluşturuldu ancak e-posta gönderilemedi, tekrar deneyin.")}
 
 
 @api.post("/auth/logout")
@@ -268,7 +288,7 @@ async def create_user(body: UserCreate, user: dict = Depends(require())):
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı")
     doc = {"email": email, "name": body.name, "role": body.role, "active": True,
-           "two_factor": True,
+           "two_factor": body.two_factor,
            "password_hash": hash_password(body.password), "created_at": utcnow_iso()}
     res = await db.users.insert_one(doc)
     await log_action(user, "Kullanıcı", "EKLE", f"{body.name} ({ROLE_LABELS[body.role]}) eklendi", str(res.inserted_id))

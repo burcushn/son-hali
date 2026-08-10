@@ -44,6 +44,11 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 - Eşleştirmede aynı döviz seçilirse kur alanı hiç görünmez, tutar birebir kapatılır (kur=1, AYNI_DOVIZ); kur yalnızca farklı dövizlerde, TCMB açılış tarihi kuruyla otomatik gelir (manuel override mümkün).
 - IBKB/Destek filtreleri, raporlarda ithalatçı bazlı özet + IBKB/destek eksik sayaçları, Excel yeni kolonlar.
 
+## Güncelleme (2026-06, 3. tur)
+- **Girişte 2 adımlı doğrulama (2FA):** kullanıcı bazında açılabilir; e-postaya 6 haneli kod (5 dk, tek kullanımlık, 5 hatalı denemede kilit), kodu tekrar gönder akışı. Şifre adımında 5 hatalı denemede 15 dk hesap kilidi.
+- **Haftalık e-posta uyarısı:** her Pazartesi 09:00 (Europe/Istanbul) → burcusahin@kalipsanaluminyum.com. İçerik: süresi geçmiş, 30 güne inen, IBKB düzenlenmemiş, destek (%3) alınmamış beyannameler. Raporlar sayfasında "Şimdi Gönder" (admin/onaylayan).
+- Test: 42/42 backend pytest + frontend 2FA ve uyarı akışları geçti.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)

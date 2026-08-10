@@ -58,6 +58,7 @@ class UserCreate(BaseModel):
     name: str
     role: str
     password: str
+    two_factor: bool = True
 
 
 class UserUpdate(BaseModel):

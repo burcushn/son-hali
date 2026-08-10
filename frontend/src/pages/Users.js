@@ -37,6 +37,7 @@ export default function Users() {
       } else {
         await api.post("/users", {
           email: form.email, name: form.name, role: form.role, password: form.password,
+          two_factor: !!form.two_factor,
         });
       }
       toast.success("Kullanıcı kaydedildi");
@@ -62,7 +63,7 @@ export default function Users() {
     <div data-testid="users-page">
       <PageHeader title="Kullanıcı Yönetimi" desc="Roller ve yetkiler — her personel yalnızca kendi işlemini yapabilir">
         <Button className="rounded-sm" data-testid="add-user-button"
-                onClick={() => setForm({ email: "", name: "", role: "ihracat", password: "", active: true })}>
+                onClick={() => setForm({ email: "", name: "", role: "ihracat", password: "", active: true, two_factor: true })}>
           <Plus className="h-4 w-4 mr-1.5" /> Yeni Kullanıcı
         </Button>
       </PageHeader>
@@ -160,7 +161,7 @@ export default function Users() {
               </div>
               <Field label={form.id ? "Yeni Şifre (boş bırakılırsa değişmez)" : "Şifre *"}
                      v={form.password} t="user-password-input" on={(v) => setForm({ ...form, password: v })} />
-              {form.id && (
+              {form.id ? (
                 <>
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={!!form.active} data-testid="user-active-checkbox"
@@ -173,6 +174,12 @@ export default function Users() {
                   Girişte e-posta doğrulama kodu istensin (2 adımlı doğrulama)
                 </label>
                 </>
+              ) : (
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={!!form.two_factor} data-testid="user-2fa-checkbox"
+                         onChange={(e) => setForm({ ...form, two_factor: e.target.checked })} />
+                  Girişte e-posta doğrulama kodu istensin (e-posta adresi gerçek olmalı)
+                </label>
               )}
             </div>
           )}
