@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 5 validates the switch from DTH/ACH TUTAR (amounts) to DTH/ACH IBAN (text). Backend: 3 new pytest cases added to /app/backend/tests/backend_test.py (TestIbkbAndBankaBildirimi): (1) test_payment_persists_dth_ach_iban — PaymentInput.dth_iban/ach_iban are round-tripped through POST /api/payments and GET /api/payments; (2) test_ach_iban_fallback_to_default_env — when a payment has no ach_iban, payment_view returns DEFAULT_ACH_IBAN env value (TR00 0000 0000 0000 0000 0000 00); (3) test_ibkb_input_rejects_legacy_tutar_fields — PUT /api/payments/{id}/ibkb ignores dth_tutar/ach_tutar extras and never stores them. Existing test_excel_banka_bildirimi_shape already asserts: (a) BANKA BİLDİRİMİ sheet header row has fill_type in (None,'none') and font.bold=True (no blue fill), (b) row[7]=KULLANILACAK DTH holds dth_iban text (e.g. 'TR11 0006 2000 1234 0006 2999 88'), (c) row[8]=KULLANILACAK ACH holds ach_iban text (or DEFAULT_ACH_IBAN fallback). Eşleştirme Detayı sheet header includes 'DTH IBAN' and 'ACH IBAN' columns. Full pytest run: 55/55 pass (the real-email TestAlerts::test_send_by_onaylayan_and_audit sent exactly one email as expected). Frontend (public REACT_APP_BACKEND_URL): banka login → Bedel form shows payment-dth-iban-input and payment-ach-iban-input (both count=1). IBKB page renders the new table headers 'DTH IBAN (DÖVIZ)' and 'ACH IBAN (TL)'. Opening the IBKB edit dialog shows: ibkb-dth-iban (readonly div, displays payment IBAN or 'Bedel kaydında IBAN girilmemiş' fallback), ibkb-ach-iban-input pre-filled with DEFAULT_ACH_IBAN when payment ach is empty, and the legacy testids ibkb-dth-input / ibkb-ach-input are ABSENT from DOM (count=0). Helper text under form clearly states KULLANILACAK DTH = döviz IBAN, KULLANILACAK ACH = bozdurulan TL IBAN.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/payments/{id}/ibkb", "issue": "Extra fields like dth_tutar/ach_tutar are silently ignored by Pydantic (Config extra=ignore). Not a defect, but consider extra='forbid' to surface stale clients during rollout."},
+      {"endpoint": "GET /api/payments", "issue": "payment_view forces ach_iban=DEFAULT_ACH_IBAN whenever the stored value is empty. This means a payment created BEFORE the env was set will appear as if it already has the default IBAN even though no IBKB record was ever saved. Consider surfacing only from IBKB edit form to avoid confusion in reports."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "IBKB edit dialog", "issues": ["When payment has no dth_iban, the readonly field shows 'Bedel kaydında IBAN girilmemiş' with the same styling as a valid IBAN. Consider italic/muted styling and a tooltip 'Bedel ekranından güncelleyin' to guide the banker."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(nice-to-have) Style empty-DTH placeholder in IBKB dialog as muted/italic",
+    "(nice-to-have) IbkbInput could set model_config extra='forbid' to reject dth_tutar/ach_tutar explicitly"
+  ],
+  "critical_code_review_comments": [
+    "server.py payment_view fills ach_iban from DEFAULT_ACH_IBAN unconditionally when empty. This is convenient for Excel/IBKB defaults but leaks env value into API responses even for brand-new bedels that the banker has not touched yet — consumers reading 'ach_iban' cannot distinguish 'auto-default' from 'manually saved'. Consider adding a boolean 'ach_iban_is_default' flag or applying the fallback only at Excel export time.",
+    "export_excel writes DTH/ACH as free text left-aligned; if payment.dth_iban is empty and no default exists for DTH, the cell is blank — acceptable per requirement, but add an audit warning row so the banker notices missing DTH IBAN before submitting to the bank.",
+    "Payments.js: 'Ödemenin geldiği {doviz} IBAN (DTH)' label uses template with form.doviz — verify label re-renders when the user switches EUR→USD in the same dialog session."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (55/55 pass)", "frontend": "100% on tested Bedel form, IBKB page + edit dialog, RBAC"},
+  "seed_data_creation": "Ephemeral TEST_IBKBFLOW_<ts> declaration + Ziraat/İş Bankası test payments + 2 matches, cleaned in test_cleanup. UI dry-run created and deleted one payment via /api/payments in the same test.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@ihracat.com/Admin1234!, ihracat@/banka@/sef@/viewer@ihracat.com/Test1234!, test2fa@ihracat.com/Test1234! (2FA on)",
+  "context_for_next_testing_agent": "New iteration-5 testids: payment-dth-iban-input, payment-ach-iban-input (Bedel form). IBKB dialog testids unchanged for editable fields (ibkb-no-input, ibkb-tarih-input, ibkb-dosya-input, ibkb-tcmb-input, ibkb-ach-iban-input, save-ibkb-button); readonly display uses data-testid='ibkb-dth-iban' (div, not input). Legacy testids ibkb-dth-input / ibkb-ach-input MUST NOT reappear. DEFAULT_ACH_IBAN env = 'TR00 0000 0000 0000 0000 0000 00'. Excel KULLANILACAK DTH/ACH columns are IBAN text (not numeric). Do not manually POST /api/alerts/send during ad-hoc probes; one send/run is already included via TestAlerts.",
+  "rca_of_the_issue": "No functional regressions found. Only design-hint suggestions listed above."
+}

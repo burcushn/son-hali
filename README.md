@@ -35,7 +35,10 @@ EMERGENT_EMAIL_KEY=""
 EMAIL_FROM_NAME="Firma Adı - İhracat Bedeli Takip"
 ALERT_EMAILS="uyari-alacak-adres@firmaniz.com"
 SEED_DEMO_USERS="false"
+DEFAULT_ACH_IBAN="TR00 0000 0000 0000 0000 0000 00"
 ```
+
+> `DEFAULT_ACH_IBAN`: bozdurulan TL'nin yattığı sabit TL IBAN. Excel'in "KULLANILACAK ACH" kolonu bu değerden gelir; kayıt bazında IBKB ekranından değiştirilebilir. Ödemenin geldiği döviz IBAN'ı (KULLANILACAK DTH) ise bedel girişi ekranında yazılır.
 
 ### Gerçek (canlı) kullanım için önemli notlar
 - `DB_NAME` değerini kendi veritabanı adınızla değiştirin (örn. `ihracat_bedeli`). Böylece test verileriyle karışmaz.

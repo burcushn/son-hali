@@ -123,6 +123,8 @@ class PaymentInput(BaseModel):
     tarih: str
     doviz: str
     tutar: float
+    dth_iban: Optional[str] = ""
+    ach_iban: Optional[str] = ""
     aciklama: Optional[str] = ""
 
 
@@ -135,13 +137,13 @@ class Payment(BaseDocument):
     kullanilan: float = 0.0
     aciklama: str = ""
     durum: str = "KULLANILMADI"
+    dth_iban: str = ""
+    ach_iban: str = ""
     # IBKB ekranından girilen bilgiler
     ibkb_duzenlendi: bool = False
     ibkb_no: str = ""
     ibkb_tarihi: str = ""
     dosya_referansi: str = ""
-    dth_tutar: float = 0.0
-    ach_tutar: float = 0.0
     tcmb_devir_orani: float = 100.0
     created_at: str = Field(default_factory=utcnow_iso)
     created_by: str = ""
@@ -152,8 +154,7 @@ class IbkbInput(BaseModel):
     ibkb_no: str = ""
     ibkb_tarihi: str = ""
     dosya_referansi: str = ""
-    dth_tutar: float = 0.0
-    ach_tutar: float = 0.0
+    ach_iban: Optional[str] = None
     tcmb_devir_orani: float = 100.0
 
 

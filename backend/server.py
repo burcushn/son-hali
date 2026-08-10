@@ -18,7 +18,7 @@ from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.middleware.cors import CORSMiddleware
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 from models import (
     User, UserCreate, UserUpdate, LoginInput, VerifyCodeInput, ResendCodeInput,
@@ -133,6 +133,7 @@ def payment_view(doc: dict) -> dict:
     p["bakiye"] = round(p["tutar"] - p["kullanilan"], 2)
     p["ibkb_durum"] = "DUZENLENDI" if p.get("ibkb_duzenlendi") else "DUZENLENMEDI"
     p["zorunlu_bozdurma"] = round(p["tutar"] * 0.30, 2)
+    p["ach_iban_default"] = os.environ.get("DEFAULT_ACH_IBAN", "")
     return p
 
 
@@ -437,12 +438,9 @@ async def update_ibkb(pid: str, body: IbkbInput, user: dict = Depends(require("b
     p = await db.payments.find_one({"_id": ObjectId(pid)})
     if not p:
         raise HTTPException(status_code=404, detail="Bedel bulunamadı")
-    toplam = round(body.dth_tutar + body.ach_tutar, 2)
-    if toplam > p["tutar"] + 0.01:
-        raise HTTPException(status_code=400,
-            detail=f"DTH + ACH toplamı gelen bedeli aşamaz ({p['tutar']:,.2f} {p['doviz']})")
-    await db.payments.update_one({"_id": ObjectId(pid)},
-                                 {"$set": {**body.model_dump(), "ibkb_duzenlendi": True}})
+    upd = body.model_dump(exclude_none=True)
+    upd["ibkb_duzenlendi"] = True
+    await db.payments.update_one({"_id": ObjectId(pid)}, {"$set": upd})
     await log_action(user, "IBKB", "GUNCELLE",
         f"{p['gonderen']} bedeli için IBKB bilgileri kaydedildi "
         f"(IBKB No: {body.ibkb_no or '-'}, Dosya Ref: {body.dosya_referansi or '-'})", pid)
@@ -600,6 +598,20 @@ def _tr_date(s: str) -> str:
         return s or ""
 
 
+def _plain_style(ws, ncols):
+    """Bankanın istediği sade başlık: renk/dolgu yok, sadece kalın yazı ve ince çerçeve."""
+    thin = Side(style="thin", color="000000")
+    for c in range(1, ncols + 1):
+        cell = ws.cell(row=1, column=c)
+        cell.font = Font(bold=True, color="000000")
+        cell.fill = PatternFill(fill_type=None)
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = Border(top=thin, bottom=thin, left=thin, right=thin)
+        ws.column_dimensions[cell.column_letter].width = 22
+    ws.row_dimensions[1].height = 32
+    ws.freeze_panes = "A2"
+
+
 def _style(ws, ncols):
     for c in range(1, ncols + 1):
         cell = ws.cell(row=1, column=c)
@@ -640,8 +652,8 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
             d["beyanname_no"],
             _tr_date(d.get("acilis_tarihi", "")),
             m["kapatilan_tutar"],
-            round(p.get("dth_tutar", 0) * oran, 2),
-            round(p.get("ach_tutar", 0) * oran, 2),
+            p.get("dth_iban", ""),
+            p.get("ach_iban") or os.environ.get("DEFAULT_ACH_IBAN", ""),
             f"%{p.get('tcmb_devir_orani', 100):g}",
             "EVET" if d.get("tesvik") else "HAYIR",
             "EVET" if d.get("taahhut") else "HAYIR",
@@ -652,9 +664,12 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
     c.font = Font(bold=True)
     c.number_format = "#,##0.00"
     for r in range(2, sira + 2):
-        for col in (6, 7, 8):
-            ws.cell(row=r, column=col).number_format = "#,##0.00"
-    _style(ws, len(headers))
+        ws.cell(row=r, column=6).number_format = "#,##0.00"
+        for col in (7, 8):
+            ws.cell(row=r, column=col).alignment = Alignment(horizontal="left")
+    _plain_style(ws, len(headers))
+    ws.column_dimensions["G"].width = 32
+    ws.column_dimensions["H"].width = 32
 
     query = {"durum": durum} if durum else {}
     decs = await db.declarations.find(query).sort("acilis_tarihi", -1).to_list(5000)
@@ -675,7 +690,7 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
 
     ws2 = wb.create_sheet("Eşleştirme Detayı")
     h2 = ["Beyanname No", "Bedel Gönderen", "Banka", "IBKB No", "Dosya Referansı", "Bedel Tarihi",
-          "Bedel Dövizi", "Kullanılan Bedel", "Kur", "Kur Kaynağı",
+          "Bedel Dövizi", "Kullanılan Bedel", "DTH IBAN", "ACH IBAN", "Kur", "Kur Kaynağı",
           "Kapatılan (Beyanname Dövizi)", "Beyanname Dövizi", "İşlem Tarihi", "İşlemi Yapan"]
     ws2.append(h2)
     for m in matches:
@@ -685,7 +700,9 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
             continue
         ws2.append([d["beyanname_no"], p["gonderen"], p["banka"], p.get("ibkb_no", ""),
                     p.get("dosya_referansi", ""), p["tarih"], p["doviz"],
-                    m["bedel_kullanilan"], m["kur"], m.get("kur_kaynak", ""), m["kapatilan_tutar"],
+                    m["bedel_kullanilan"], p.get("dth_iban", ""),
+                    p.get("ach_iban") or os.environ.get("DEFAULT_ACH_IBAN", ""),
+                    m["kur"], m.get("kur_kaynak", ""), m["kapatilan_tutar"],
                     d["doviz"], m["tarih"][:19].replace("T", " "), m.get("kullanici_ad", "")])
     _style(ws2, len(h2))
 

@@ -14,7 +14,7 @@ import {
 
 const EMPTY = {
   banka: "", gonderen: "", tarih: new Date().toISOString().slice(0, 10),
-  doviz: "USD", tutar: "", aciklama: "",
+  doviz: "USD", tutar: "", dth_iban: "", ach_iban: "", aciklama: "",
 };
 
 export default function Payments() {
@@ -102,6 +102,7 @@ export default function Payments() {
                 <td className="px-3 py-2">
                   {p.gonderen}
                   {p.aciklama && <div className="text-xs text-muted-foreground">{p.aciklama}</div>}
+                  {p.dth_iban && <div className="text-xs text-muted-foreground mono">DTH: {p.dth_iban}</div>}
                 </td>
                 <td className="px-3 py-2">{p.banka}</td>
                 <td className="px-3 py-2 mono text-xs">{fmtDate(p.tarih)}</td>
@@ -160,6 +161,10 @@ export default function Payments() {
               </div>
               <Field label="Gelen Tutar *" type="number" v={form.tutar} t="payment-amount-input" mono
                      on={(v) => setForm({ ...form, tutar: v })} />
+              <Field label={`Ödemenin geldiği ${form.doviz} IBAN (DTH)`} v={form.dth_iban} t="payment-dth-iban-input" mono
+                     on={(v) => setForm({ ...form, dth_iban: v })} />
+              <Field label="Bozdurulan TL IBAN (ACH)" v={form.ach_iban} t="payment-ach-iban-input" mono
+                     on={(v) => setForm({ ...form, ach_iban: v })} />
               <Field label="Açıklama" v={form.aciklama} t="payment-note-input" on={(v) => setForm({ ...form, aciklama: v })} />
             </div>
           )}

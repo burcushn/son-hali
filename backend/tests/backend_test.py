@@ -573,6 +573,40 @@ class TestIbkbAndBankaBildirimi:
         assert r.status_code == 200
         self.__class__.pay_usd_id = r.json()["id"]
 
+    def test_payment_persists_dth_ach_iban(self, tokens):
+        """PaymentInput.dth_iban / ach_iban are persisted and readable via GET /api/payments."""
+        r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+            "banka": "TEST", "gonderen": "TEST_IBAN_PAY",
+            "tarih": "2026-04-02", "doviz": "EUR", "tutar": 100.0,
+            "dth_iban": "TR22 EUR IBAN 0000 0000 0000 01",
+            "ach_iban": "TR22 TL  IBAN 0000 0000 0000 02",
+        })
+        assert r.status_code == 200, r.text
+        pid = r.json()["id"]
+        assert r.json()["dth_iban"].startswith("TR22 EUR")
+        assert r.json()["ach_iban"].startswith("TR22 TL")
+
+        got = next(x for x in requests.get(f"{API}/payments", headers=_h(tokens["admin"])).json()
+                   if x["id"] == pid)
+        assert got["dth_iban"].startswith("TR22 EUR")
+        assert got["ach_iban"].startswith("TR22 TL")
+        requests.delete(f"{API}/payments/{pid}", headers=_h(tokens["banka"]))
+
+    def test_ach_iban_fallback_to_default_env(self, tokens):
+        """When ach_iban is empty, payment_view returns DEFAULT_ACH_IBAN env value."""
+        default_iban = "TR00 0000 0000 0000 0000 0000 00"
+        r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+            "banka": "TEST", "gonderen": "TEST_ACH_FALLBACK",
+            "tarih": "2026-04-02", "doviz": "EUR", "tutar": 50.0,
+        })
+        assert r.status_code == 200
+        pid = r.json()["id"]
+        got = next(x for x in requests.get(f"{API}/payments", headers=_h(tokens["admin"])).json()
+                   if x["id"] == pid)
+        assert got["ach_iban"] == "", got["ach_iban"]
+        assert got["ach_iban_default"] == default_iban, got["ach_iban_default"]
+        requests.delete(f"{API}/payments/{pid}", headers=_h(tokens["banka"]))
+
     def test_ibkb_payment_view_defaults(self, tokens):
         r = requests.get(f"{API}/payments", headers=_h(tokens["admin"]))
         assert r.status_code == 200
@@ -584,50 +618,57 @@ class TestIbkbAndBankaBildirimi:
 
     def test_ibkb_rbac_forbidden_roles(self, tokens):
         payload = {"ibkb_no": "IBKB-1", "ibkb_tarihi": "2026-04-03",
-                   "dosya_referansi": "REF-1", "dth_tutar": 100, "ach_tutar": 100,
+                   "dosya_referansi": "REF-1", "ach_iban": "TR11 0006 2000 0000 0000 0000 01",
                    "tcmb_devir_orani": 100}
         for role in ["ihracat", "onaylayan", "viewer"]:
             r = requests.put(f"{API}/payments/{self.__class__.pay_eur_id}/ibkb",
                              headers=_h(tokens[role]), json=payload)
             assert r.status_code == 403, f"{role} should be 403, got {r.status_code}"
 
-    def test_ibkb_validation_overflow(self, tokens):
-        # DTH + ACH > tutar (6000 EUR) -> 400
-        r = requests.put(f"{API}/payments/{self.__class__.pay_eur_id}/ibkb",
-                         headers=_h(tokens["banka"]),
-                         json={"ibkb_no": "IBKB-1", "ibkb_tarihi": "2026-04-03",
-                               "dosya_referansi": "REF-1",
-                               "dth_tutar": 5000, "ach_tutar": 2000,
-                               "tcmb_devir_orani": 100})
-        assert r.status_code == 400, r.text
-        assert "aş" in r.text.lower() or "dth" in r.text.lower()
+    def test_dth_iban_from_payment(self, tokens):
+        r = requests.get(f"{API}/payments", headers=_h(tokens["admin"]))
+        p = next(x for x in r.json() if x["id"] == self.__class__.pay_eur_id)
+        assert "dth_iban" in p and "ach_iban" in p
 
     def test_banka_can_save_ibkb(self, tokens):
-        # EUR bedel: dth=1800, ach=1800 (toplam 3600 <= 6000)
         r = requests.put(f"{API}/payments/{self.__class__.pay_eur_id}/ibkb",
                          headers=_h(tokens["banka"]),
                          json={"ibkb_duzenlendi": True, "ibkb_no": "IBKB-EUR-1",
                                "ibkb_tarihi": "2026-04-03",
                                "dosya_referansi": "DOSYA-EUR-1",
-                               "dth_tutar": 1800, "ach_tutar": 1800,
+                               "ach_iban": "TR11 0006 2000 1234 0006 2999 88",
                                "tcmb_devir_orani": 100})
         assert r.status_code == 200, r.text
         p = r.json()
         assert p["ibkb_durum"] == "DUZENLENDI"
         assert p["ibkb_no"] == "IBKB-EUR-1"
         assert p["dosya_referansi"] == "DOSYA-EUR-1"
-        assert p["dth_tutar"] == 1800 and p["ach_tutar"] == 1800
+        assert p["ach_iban"] == "TR11 0006 2000 1234 0006 2999 88"
         assert p["tcmb_devir_orani"] == 100
 
-        # USD bedel: dth=2700, ach=0
         r = requests.put(f"{API}/payments/{self.__class__.pay_usd_id}/ibkb",
                          headers=_h(tokens["admin"]),
                          json={"ibkb_duzenlendi": True, "ibkb_no": "IBKB-USD-1",
                                "ibkb_tarihi": "2026-04-03",
                                "dosya_referansi": "DOSYA-USD-1",
-                               "dth_tutar": 2700, "ach_tutar": 0,
                                "tcmb_devir_orani": 100})
         assert r.status_code == 200
+
+    def test_ibkb_input_rejects_legacy_tutar_fields(self, tokens):
+        """dth_tutar / ach_tutar are no longer part of IbkbInput; extras must be ignored.
+        The endpoint must still succeed but the payment must not store any tutar fields."""
+        r = requests.put(f"{API}/payments/{self.__class__.pay_eur_id}/ibkb",
+                         headers=_h(tokens["banka"]),
+                         json={"ibkb_duzenlendi": True, "ibkb_no": "IBKB-EUR-1",
+                               "ibkb_tarihi": "2026-04-03",
+                               "dosya_referansi": "DOSYA-EUR-1",
+                               "ach_iban": "TR11 0006 2000 1234 0006 2999 88",
+                               "tcmb_devir_orani": 100,
+                               "dth_tutar": 123, "ach_tutar": 456})
+        assert r.status_code == 200, r.text
+        p = r.json()
+        assert "dth_tutar" not in p
+        assert "ach_tutar" not in p
 
     def test_create_matches(self, tokens):
         # EUR->EUR match 3000
@@ -690,18 +731,17 @@ class TestIbkbAndBankaBildirimi:
             assert row[9] == "EVET"  # tesvik
             assert row[10] == "EVET"  # taahhut
 
-        # EUR row (kapatilan 3000, dth=1800*3000/6000=900, ach=900)
+        # EUR row: DTH/ACH artık IBAN metni
         eur_row = next(r for r in our_rows if r[1] == "DOSYA-EUR-1")
         assert abs(eur_row[5] - 3000.0) < 0.01
-        assert abs(eur_row[6] - 900.0) < 0.02
-        assert abs(eur_row[7] - 900.0) < 0.02
+        assert eur_row[7] == "TR11 0006 2000 1234 0006 2999 88", eur_row[7]
 
-        # USD row: kapatilan 1000 EUR, bedel_kullanilan = 1000/0.9 ~ 1111.11
-        # oran = 1111.11/9000 = 0.12346; dth = 2700*oran ~ 333.33; ach = 0
         usd_row = next(r for r in our_rows if r[1] == "DOSYA-USD-1")
         assert abs(usd_row[5] - 1000.0) < 0.01
-        assert abs(usd_row[6] - 333.33) < 1.0
-        assert abs(usd_row[7] - 0.0) < 0.01
+
+        # Başlık satırı boyalı OLMAMALI (banka istemiyor)
+        assert ws["A1"].fill.fill_type in (None, "none"), ws["A1"].fill.fill_type
+        assert ws["A1"].font.bold is True
 
         assert toplam_row is not None
         # TOPLAM col F must include our two matches (3000 + 1000 = 4000);
@@ -717,6 +757,7 @@ class TestIbkbAndBankaBildirimi:
         ws2 = wb["Eşleştirme Detayı"]
         h2 = [c.value for c in ws2[1]]
         assert "IBKB No" in h2 and "Dosya Referansı" in h2
+        assert "DTH IBAN" in h2 and "ACH IBAN" in h2
 
     def test_declaration_view_returns_tesvik_taahhut(self, tokens):
         r = requests.get(f"{API}/declarations", headers=_h(tokens["admin"]),

@@ -44,8 +44,8 @@ export default function Ibkb() {
       ibkb_no: p.ibkb_no || "",
       ibkb_tarihi: p.ibkb_tarihi || new Date().toISOString().slice(0, 10),
       dosya_referansi: p.dosya_referansi || "",
-      dth_tutar: String(p.dth_tutar || ""),
-      ach_tutar: String(p.ach_tutar || p.zorunlu_bozdurma || ""),
+      dth_iban: p.dth_iban || "",
+      ach_iban: p.ach_iban || p.ach_iban_default || "",
       tcmb_devir_orani: String(p.tcmb_devir_orani ?? 100),
     });
 
@@ -57,8 +57,7 @@ export default function Ibkb() {
         ibkb_no: form.ibkb_no,
         ibkb_tarihi: form.ibkb_tarihi,
         dosya_referansi: form.dosya_referansi,
-        dth_tutar: Number(form.dth_tutar || 0),
-        ach_tutar: Number(form.ach_tutar || 0),
+        ach_iban: form.ach_iban,
         tcmb_devir_orani: Number(form.tcmb_devir_orani || 100),
       });
       toast.success("IBKB bilgileri kaydedildi");
@@ -75,7 +74,7 @@ export default function Ibkb() {
     <div data-testid="ibkb-page">
       <PageHeader
         title="IBKB İşlemleri"
-        desc="IBKB düzenlendikten sonra dosya referansı, DTH/ACH dağılımı ve TCMB devir oranı girilir. Bu bilgiler banka bildirim Excel'ini besler."
+        desc="IBKB düzenlendikten sonra dosya referansı, IBAN bilgileri ve TCMB devir oranı girilir. Bu bilgiler banka bildirim Excel'ini besler."
       />
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -102,8 +101,8 @@ export default function Ibkb() {
               <th className="px-3 py-2.5 font-medium text-right">Zorunlu Bozdurma (%30)</th>
               <th className="px-3 py-2.5 font-medium">IBKB No / Tarih</th>
               <th className="px-3 py-2.5 font-medium">Dosya Referansı</th>
-              <th className="px-3 py-2.5 font-medium text-right">DTH</th>
-              <th className="px-3 py-2.5 font-medium text-right">ACH</th>
+              <th className="px-3 py-2.5 font-medium">DTH IBAN (döviz)</th>
+              <th className="px-3 py-2.5 font-medium">ACH IBAN (TL)</th>
               <th className="px-3 py-2.5 font-medium text-right">TCMB Devir</th>
               <th className="px-3 py-2.5 font-medium">Durum</th>
               <th className="px-3 py-2.5 font-medium text-right">İşlem</th>
@@ -124,8 +123,8 @@ export default function Ibkb() {
                   <div className="text-muted-foreground">{p.ibkb_tarihi ? fmtDate(p.ibkb_tarihi) : ""}</div>
                 </td>
                 <td className="px-3 py-2 mono text-xs">{p.dosya_referansi || "-"}</td>
-                <td className="px-3 py-2 mono text-right">{fmt(p.dth_tutar)}</td>
-                <td className="px-3 py-2 mono text-right">{fmt(p.ach_tutar)}</td>
+                <td className="px-3 py-2 mono text-xs">{p.dth_iban || "-"}</td>
+                <td className="px-3 py-2 mono text-xs">{p.ach_iban || p.ach_iban_default || "-"}</td>
                 <td className="px-3 py-2 mono text-right">%{p.tcmb_devir_orani ?? 100}</td>
                 <td className="px-3 py-2">
                   <Badge2 cfg={p.ibkb_durum === "DUZENLENDI" ? OK : NOK} testid={`ibkb-status-${p.id}`} />
@@ -173,16 +172,22 @@ export default function Ibkb() {
                      on={(v) => setForm({ ...form, dosya_referansi: v })} />
               <Field label="TCMB Devir Oranı (%)" type="number" v={form.tcmb_devir_orani} t="ibkb-tcmb-input" mono
                      on={(v) => setForm({ ...form, tcmb_devir_orani: v })} />
-              <Field label={`Kullanılacak DTH (${form.doviz})`} type="number" v={form.dth_tutar} t="ibkb-dth-input" mono
-                     on={(v) => setForm({ ...form, dth_tutar: v })} />
-              <Field label={`Kullanılacak ACH (${form.doviz})`} type="number" v={form.ach_tutar} t="ibkb-ach-input" mono
-                     on={(v) => setForm({ ...form, ach_tutar: v })} />
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wide">
+                  DTH IBAN ({form.doviz}) — bedel girişinden gelir
+                </Label>
+                <div className={`h-10 flex items-center mono text-xs border border-dashed border-border rounded-sm px-3 overflow-hidden ${form.dth_iban ? "" : "italic text-muted-foreground"}`}
+                     title={form.dth_iban ? "" : "Bedel Yönetimi ekranından IBAN girin"}
+                     data-testid="ibkb-dth-iban">
+                  {form.dth_iban || "Bedel kaydında IBAN girilmemiş — Bedel Yönetimi'nden ekleyin"}
+                </div>
+              </div>
+              <Field label="ACH IBAN (bozdurulan TL hesabı)" v={form.ach_iban} t="ibkb-ach-iban-input" mono
+                     on={(v) => setForm({ ...form, ach_iban: v })} />
               <div className="sm:col-span-2 text-xs text-muted-foreground border border-border rounded-sm p-2">
-                DTH + ACH ={" "}
-                <span className="mono font-semibold text-foreground" data-testid="ibkb-total-preview">
-                  {fmt(Number(form.dth_tutar || 0) + Number(form.ach_tutar || 0), form.doviz)}
-                </span>{" "}
-                · gelen bedeli aşamaz. Destek alabilmek için TCMB devir oranı %100 olmalıdır.
+                Excel'de <b>KULLANILACAK DTH</b> kolonu ödemenin geldiği döviz IBAN'ını,
+                <b> KULLANILACAK ACH</b> kolonu bozdurulan tutarın yattığı TL IBAN'ını gösterir.
+                Destek alabilmek için TCMB devir oranı %100 olmalıdır.
               </div>
             </div>
           )}

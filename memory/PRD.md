@@ -55,6 +55,13 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 - **Excel bankanın resmi şablonuna göre yeniden yazıldı:** ilk sayfa "BANKA BİLDİRİMİ" — SIRA NO, DOSYA REFERANSI, GÜMRÜK MÜDÜRLÜĞÜ KODU, GB NO, GB TARİHİ (gg.aa.yyyy), GB'YE SAYILACAK TUTAR, KULLANILACAK DTH, KULLANILACAK ACH, TCMB DEVİR ORANI, TEŞVİK, TAAHHÜT + TOPLAM satırı. Ek sayfalar: Beyanname Listesi, Eşleştirme Detayı.
 - Test: 51/51 backend pytest + frontend IBKB/yetki akışları geçti.
 
+## Güncelleme (2026-06, 5. tur)
+- **KULLANILACAK DTH** = ödemenin geldiği döviz IBAN'ı → bedel (banka girişi) formunda giriliyor.
+- **KULLANILACAK ACH** = bozdurulan TL'nin yattığı IBAN → `DEFAULT_ACH_IBAN` env değerinden sabit gelir, IBKB ekranından kayıt bazında değiştirilebilir.
+- Excel'de **başlık satırındaki mavi dolgu kaldırıldı** (banka istemiyor): sade, kalın yazı + ince çerçeve.
+- Eşleştirme Detayı sayfasına DTH IBAN / ACH IBAN kolonları eklendi.
+- `SEED_DEMO_USERS=false` ile demo hesaplar hiç oluşturulmaz (canlı kullanım için).
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)
