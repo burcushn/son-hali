@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 
 const EMPTY = {
@@ -241,6 +241,9 @@ export default function Declarations() {
             <DialogTitle className="font-display">
               {form?.id ? "Beyanname Düzenle" : "Yeni Beyanname"}
             </DialogTitle>
+            <DialogDescription>
+              Süre, kapanış tarihinden itibaren 180 gün olarak hesaplanır. Destek ödemesi tutarın %3'üdür.
+            </DialogDescription>
           </DialogHeader>
           {form && (
             <div className="grid sm:grid-cols-2 gap-4">

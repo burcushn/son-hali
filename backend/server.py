@@ -441,7 +441,8 @@ async def update_ibkb(pid: str, body: IbkbInput, user: dict = Depends(require("b
     if toplam > p["tutar"] + 0.01:
         raise HTTPException(status_code=400,
             detail=f"DTH + ACH toplamı gelen bedeli aşamaz ({p['tutar']:,.2f} {p['doviz']})")
-    await db.payments.update_one({"_id": ObjectId(pid)}, {"$set": body.model_dump()})
+    await db.payments.update_one({"_id": ObjectId(pid)},
+                                 {"$set": {**body.model_dump(), "ibkb_duzenlendi": True}})
     await log_action(user, "IBKB", "GUNCELLE",
         f"{p['gonderen']} bedeli için IBKB bilgileri kaydedildi "
         f"(IBKB No: {body.ibkb_no or '-'}, Dosya Ref: {body.dosya_referansi or '-'})", pid)

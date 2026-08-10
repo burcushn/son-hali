@@ -8,7 +8,7 @@ import { Field } from "@/pages/Declarations";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 
 const PERMS = [
@@ -143,6 +143,9 @@ export default function Users() {
         <DialogContent className="max-w-lg rounded-sm" data-testid="user-form-dialog">
           <DialogHeader>
             <DialogTitle className="font-display">{form?.id ? "Kullanıcı Düzenle" : "Yeni Kullanıcı"}</DialogTitle>
+            <DialogDescription>
+              Rol, kullanıcının hangi modülde işlem yapabileceğini belirler.
+            </DialogDescription>
           </DialogHeader>
           {form && (
             <div className="space-y-4">

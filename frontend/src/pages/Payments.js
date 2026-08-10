@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 
 const EMPTY = {
@@ -141,6 +141,9 @@ export default function Payments() {
         <DialogContent className="max-w-2xl rounded-sm" data-testid="payment-form-dialog">
           <DialogHeader>
             <DialogTitle className="font-display">{form?.id ? "Bedel Düzenle" : "Yeni Bedel"}</DialogTitle>
+            <DialogDescription>
+              Bankaya gelen ihracat bedeli. IBKB bilgileri IBKB İşlemleri ekranından girilir.
+            </DialogDescription>
           </DialogHeader>
           {form && (
             <div className="grid sm:grid-cols-2 gap-4">

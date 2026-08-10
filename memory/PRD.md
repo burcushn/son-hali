@@ -49,6 +49,12 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 - **Haftalık e-posta uyarısı:** her Pazartesi 09:00 (Europe/Istanbul) → burcusahin@kalipsanaluminyum.com. İçerik: süresi geçmiş, 30 güne inen, IBKB düzenlenmemiş, destek (%3) alınmamış beyannameler. Raporlar sayfasında "Şimdi Gönder" (admin/onaylayan).
 - Test: 42/42 backend pytest + frontend 2FA ve uyarı akışları geçti.
 
+## Güncelleme (2026-06, 4. tur)
+- **IBKB İşlemleri ekranı (/ibkb):** IBKB No, IBKB tarihi, **dosya referansı**, TCMB devir oranı (%100 zorunlu), kullanılacak **DTH** ve **ACH** tutarları (zorunlu %30 bozdurmanın nereye aktarıldığı) banka personeli tarafından girilir.
+- **Beyannameye Teşvik / Taahhüt (EVET-HAYIR)** alanları eklendi.
+- **Excel bankanın resmi şablonuna göre yeniden yazıldı:** ilk sayfa "BANKA BİLDİRİMİ" — SIRA NO, DOSYA REFERANSI, GÜMRÜK MÜDÜRLÜĞÜ KODU, GB NO, GB TARİHİ (gg.aa.yyyy), GB'YE SAYILACAK TUTAR, KULLANILACAK DTH, KULLANILACAK ACH, TCMB DEVİR ORANI, TEŞVİK, TAAHHÜT + TOPLAM satırı. Ek sayfalar: Beyanname Listesi, Eşleştirme Detayı.
+- Test: 51/51 backend pytest + frontend IBKB/yetki akışları geçti.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)
