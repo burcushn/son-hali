@@ -1,21 +1,53 @@
 import { useEffect, useState } from "react";
-import { api, fmtDateTime } from "@/lib/apiClient";
+import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
+import { api, errMsg, fmtDateTime } from "@/lib/apiClient";
+import { useAuth } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 
-const MODULES = ["", "Beyanname", "Bedel", "IBKB", "Eşleştirme", "Kullanıcı", "Excel", "Uyarı"];
+const MODULES = ["", "Beyanname", "Bedel", "IBKB", "Eşleştirme", "Kullanıcı", "Excel", "Uyarı", "Hareket"];
 
 export default function AuditLog() {
+  const { user } = useAuth();
   const [logs, setLogs] = useState([]);
   const [modul, setModul] = useState("");
 
-  useEffect(() => {
+  const load = () =>
     api.get("/audit-logs", { params: { modul } }).then(({ data }) => setLogs(data));
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line
   }, [modul]);
+
+  const clean = async () => {
+    const v = window.prompt(
+      "Kaç günden eski hareket kayıtları silinsin? (örn. 365 = 1 yıldan eski. 0 yazarsanız tüm geçmiş silinir)",
+      "365"
+    );
+    if (v === null) return;
+    try {
+      const { data } = await api.delete("/audit-logs", { params: { older_than_days: Number(v) } });
+      toast.success(`${data.silinen} kayıt silindi`);
+      load();
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
 
   return (
     <div data-testid="audit-page">
-      <PageHeader title="Hareket Geçmişi" desc="Tüm ekleme, güncelleme, silme ve eşleştirme işlemleri" />
+      <PageHeader
+        title="Hareket Geçmişi"
+        desc="Tüm ekleme, güncelleme, silme ve eşleştirme işlemleri · kayıtlar çok az yer kaplar, saklamanız önerilir"
+      >
+        {user?.role === "admin" && (
+          <Button variant="outline" className="rounded-sm" onClick={clean} data-testid="clear-audit-button">
+            <Trash2 className="h-4 w-4 mr-1.5" /> Eski Kayıtları Temizle
+          </Button>
+        )}
+      </PageHeader>
 
       <div className="flex flex-wrap gap-2 mb-4">
         {MODULES.map((m) => (

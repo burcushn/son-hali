@@ -593,6 +593,19 @@ async def audit_logs(modul: str = "", limit: int = 200, user: dict = Depends(get
     return [{k: v for k, v in l.items() if k != "_id"} for l in logs]
 
 
+@api.delete("/audit-logs")
+async def clear_audit_logs(older_than_days: int = 365, user: dict = Depends(require())):
+    """Belirtilen günden eski hareket kayıtlarını siler (sadece admin). 0 = tümü."""
+    if older_than_days <= 0:
+        n = (await db.audit_logs.delete_many({})).deleted_count
+    else:
+        limit = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).isoformat()
+        n = (await db.audit_logs.delete_many({"tarih": {"$lt": limit}})).deleted_count
+    await log_action(user, "Hareket", "TEMIZLE",
+                     f"{n} eski hareket kaydı silindi ({older_than_days} günden eski)")
+    return {"silinen": n}
+
+
 # ---------------- excel export ----------------
 HDR_FILL = PatternFill("solid", fgColor="4338CA")
 

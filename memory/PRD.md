@@ -66,6 +66,8 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 
 - **Excel öncesi eksik alan kontrolü:** `GET /api/export/check` ile dosya referansı, gümrük kodu, DTH/ACH IBAN ve IBKB kaydı eksik satırlar listelenir; indirme öncesi kullanıcıya onay sorulur.
 
+- **Hareket geçmişi temizleme:** `DELETE /api/audit-logs?older_than_days=N` (sadece admin) + Hareket Geçmişi ekranında "Eski Kayıtları Temizle" butonu.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)
