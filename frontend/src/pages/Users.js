@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, ShieldCheck } from "lucide-react";
 import { api, errMsg, ROLE_LABELS } from "@/lib/apiClient";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Layout";
+import { BackupPanel } from "@/components/BackupPanel";
 import { Field } from "@/pages/Declarations";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -118,6 +119,8 @@ export default function Users() {
           </table>
         </div>
 
+        <div className="space-y-4">
+        <BackupPanel />
         <div className="border border-border bg-card rounded-sm p-4">
           <div className="flex items-center gap-2 font-display font-semibold text-sm mb-4">
             <ShieldCheck className="h-4 w-4 text-primary" /> Yetki Matrisi
@@ -136,6 +139,7 @@ export default function Users() {
               yetki alanındaki kayıtlar üzerinde işlem yapabilir.
             </div>
           </div>
+        </div>
         </div>
       </div>
 

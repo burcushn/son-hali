@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FileText, FileClock, FileCheck2, Wallet, Landmark, AlertTriangle, Clock, Loader2,
+  CalendarCheck, PiggyBank,
 } from "lucide-react";
 import { api, fmt, fmtDate, fmtDateTime } from "@/lib/apiClient";
 import { PageHeader } from "@/components/Layout";
@@ -99,6 +100,33 @@ export default function Dashboard() {
           <div className="h-1.5 bg-secondary mt-3">
             <div className="h-full bg-primary transition-[width] duration-500"
                  style={{ width: `${d.toplam ? (d.kapali / d.toplam) * 100 : 0}%` }} />
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <Card className="p-4">
+          <div className="flex items-start justify-between">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              Bu Ay Kapatılan Tutar
+            </div>
+            <CalendarCheck className="h-4 w-4 text-emerald-500" />
+          </div>
+          <CurList obj={d.bu_ay_kapatilan} testid="kpi-bu-ay-kapatilan" />
+          <div className="text-xs text-muted-foreground mt-2">
+            {d.bu_ay_islem_sayi || 0} eşleştirme işlemi
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-start justify-between">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              Bekleyen Destek Ödemesi (%3)
+            </div>
+            <PiggyBank className="h-4 w-4 text-amber-500" />
+          </div>
+          <CurList obj={d.destek_bekleyen_tutar} testid="kpi-destek-bekleyen" />
+          <div className="text-xs text-muted-foreground mt-2">
+            {d.destek_bekleyen_sayi || 0} beyannamede destek alınmadı (kapatılan tutar bazında)
           </div>
         </Card>
       </div>

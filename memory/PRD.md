@@ -70,6 +70,19 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 
 - **Hareket geçmişi**: kayıtlar `AUDIT_RETENTION_DAYS` (varsayılan 30) gün saklanır, her gün 03:30'da eski kayıtlar otomatik silinir; admin manuel temizleyebilir.
 
+## Güncelleme (2026-06, 6. tur) — Veri taşıma + Dashboard kartları
+- **Yedekleme/geri yükleme (uygulama içi, sadece admin):** `GET /api/backup` tüm koleksiyonları
+  (users, declarations, payments, matches, audit_logs) tek JSON olarak indirir;
+  `POST /api/backup/restore?mode=merge|replace` yükler (merge=upsert, replace=önce temizle).
+  UI: Kullanıcı Yönetimi sayfasında `BackupPanel` (data-testid: backup-panel,
+  backup-download-button, restore-mode-merge/replace, backup-restore-button).
+- **Sunucu tarafı yedek script'leri:** `yedekle-veritabani.sh/.bat`, `geri-yukle-veritabani.sh/.bat`
+  (mongodump/mongorestore, Docker konteynerini otomatik algılar) + `VERI-TASIMA.md` Türkçe kılavuz.
+- **Dashboard yeni kartlar:** "Bu Ay Kapatılan Tutar" (döviz bazlı, eşleştirme tarihine göre,
+  işlem sayısı ile) ve "Bekleyen Destek Ödemesi (%3)" (destek alınmamış beyannameler, sayı + tutar).
+  Dashboard yanıtına `bu_ay_kapatilan, bu_ay_islem_sayi, destek_bekleyen_sayi, destek_bekleyen_tutar` eklendi.
+- Test: backup indir/geri yükle curl ile doğrulandı, dashboard ve kullanıcı ekranı screenshot ile doğrulandı.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)

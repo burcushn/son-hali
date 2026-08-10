@@ -6,6 +6,7 @@ load_dotenv(ROOT_DIR / ".env")
 
 import os
 import io
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 
@@ -13,7 +14,7 @@ import bcrypt
 import jwt
 import secrets
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File
 from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.middleware.cors import CORSMiddleware
@@ -571,7 +572,30 @@ async def dashboard(user: dict = Depends(get_current_user)):
 
     open_decs = [d for d in decs if d["durum"] != "KAPALI"]
     logs = await db.audit_logs.find({}).sort("tarih", -1).to_list(12)
+
+    # bu ay kapatılan tutar (eşleştirme tarihine göre, beyanname dövizi cinsinden)
+    now = datetime.now(timezone.utc)
+    ay_basi = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    dec_cur = {d["id"]: d["doviz"] for d in decs}
+    bu_ay = {}
+    ms = await db.matches.find({"tarih": {"$gte": ay_basi}}).to_list(5000)
+    for m in ms:
+        cur = dec_cur.get(str(m.get("declaration_id")), "")
+        if not cur:
+            continue
+        bu_ay[cur] = round(bu_ay.get(cur, 0) + float(m.get("kapatilan_tutar") or 0), 2)
+
+    # bekleyen destek ödemesi (%3): destek alınmamış beyannameler
+    destek_bekleyen = [d for d in decs if not d.get("destek_alindi")]
+    destek_tutar = {}
+    for d in destek_bekleyen:
+        destek_tutar[d["doviz"]] = round(destek_tutar.get(d["doviz"], 0) + float(d.get("kapatilan") or 0), 2)
+
     return {
+        "bu_ay_kapatilan": bu_ay,
+        "bu_ay_islem_sayi": len(ms),
+        "destek_bekleyen_sayi": len(destek_bekleyen),
+        "destek_bekleyen_tutar": destek_tutar,
         "acik": len([d for d in decs if d["durum"] == "ACIK"]),
         "kismi": len([d for d in decs if d["durum"] == "KISMI"]),
         "kapali": len([d for d in decs if d["durum"] == "KAPALI"]),
@@ -604,6 +628,55 @@ async def clear_audit_logs(older_than_days: int = 365, user: dict = Depends(requ
     await log_action(user, "Hareket", "TEMIZLE",
                      f"{n} eski hareket kaydı silindi ({older_than_days} günden eski)")
     return {"silinen": n}
+
+
+# ---------------- yedekleme / geri yükleme ----------------
+BACKUP_COLLECTIONS = ["users", "declarations", "payments", "matches", "audit_logs"]
+
+
+@api.get("/backup")
+async def backup_all(user: dict = Depends(require())):
+    """Tüm verileri tek JSON dosyası olarak indirir (sadece admin)."""
+    data = {"_meta": {"olusturma": utcnow_iso(), "surum": 1, "olusturan": user.get("email", "")}}
+    for col in BACKUP_COLLECTIONS:
+        docs = await db[col].find({}).to_list(200000)
+        for d in docs:
+            d["_id"] = str(d["_id"])
+        data[col] = docs
+    await log_action(user, "Yedek", "INDIR", "Tüm veriler JSON olarak yedeklendi")
+    buf = io.BytesIO(json.dumps(data, ensure_ascii=False, indent=1).encode("utf-8"))
+    fn = f"ihracat-yedek-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.json"
+    return StreamingResponse(buf, media_type="application/json",
+                             headers={"Content-Disposition": f'attachment; filename="{fn}"'})
+
+
+@api.post("/backup/restore")
+async def restore_all(file: UploadFile = File(...), mode: str = "merge",
+                      user: dict = Depends(require())):
+    """Yedek dosyasından geri yükleme. mode=merge (varsayılan) veya replace."""
+    try:
+        data = json.loads((await file.read()).decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Geçersiz yedek dosyası (JSON okunamadı)")
+    if not isinstance(data, dict) or not any(c in data for c in BACKUP_COLLECTIONS):
+        raise HTTPException(status_code=400, detail="Bu dosya bir sistem yedeği değil")
+    sonuc = {}
+    for col in BACKUP_COLLECTIONS:
+        docs = data.get(col) or []
+        if mode == "replace":
+            await db[col].delete_many({})
+        eklenen = 0
+        for d in docs:
+            try:
+                oid = ObjectId(d.pop("_id"))
+            except Exception:
+                oid = ObjectId()
+            await db[col].replace_one({"_id": oid}, {**d, "_id": oid}, upsert=True)
+            eklenen += 1
+        sonuc[col] = eklenen
+    await log_action(user, "Yedek", "GERI_YUKLE",
+                     f"Yedekten geri yükleme ({mode}): " + ", ".join(f"{k}={v}" for k, v in sonuc.items()))
+    return {"ok": True, "mode": mode, "yuklenen": sonuc}
 
 
 # ---------------- excel export ----------------
