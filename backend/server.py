@@ -787,6 +787,8 @@ async def startup():
             ("banka@ihracat.com", "Banka Personeli", "banka"),
             ("sef@ihracat.com", "Operasyon Şefi", "onaylayan"),
             ("viewer@ihracat.com", "Görüntüleyici", "goruntuleyici")]
+    if os.environ.get("SEED_DEMO_USERS", "true").lower() != "true":
+        demo = []
     for email, name, role in demo:
         if not await db.users.find_one({"email": email}):
             await db.users.insert_one({"email": email, "password_hash": hash_password("Test1234!"),

@@ -34,7 +34,15 @@ ADMIN_PASSWORD="GucluBirSifre!"
 EMERGENT_EMAIL_KEY=""
 EMAIL_FROM_NAME="Firma Adı - İhracat Bedeli Takip"
 ALERT_EMAILS="uyari-alacak-adres@firmaniz.com"
+SEED_DEMO_USERS="false"
 ```
+
+### Gerçek (canlı) kullanım için önemli notlar
+- `DB_NAME` değerini kendi veritabanı adınızla değiştirin (örn. `ihracat_bedeli`). Böylece test verileriyle karışmaz.
+- `SEED_DEMO_USERS="false"` yaparsanız demo hesaplar (ihracat@/banka@/sef@/viewer@ihracat.com) **hiç oluşturulmaz**; sadece `ADMIN_EMAIL` ile admin hesabı açılır, diğer kullanıcıları Kullanıcı Yönetimi ekranından kendiniz eklersiniz.
+- `ADMIN_EMAIL` ve `ADMIN_PASSWORD`'ü kendi kurumsal bilgilerinizle değiştirin; şifreyi ilk girişten sonra da güncelleyebilirsiniz.
+- `JWT_SECRET`'i mutlaka uzun ve rastgele bir değerle değiştirin.
+- Örnek/deneme kayıtlarını silmek isterseniz: mongo shell'de `db.declarations.deleteMany({}); db.payments.deleteMany({}); db.matches.deleteMany({}); db.audit_logs.deleteMany({})`
 > Not: E-posta gönderimi (2FA kodu + haftalık uyarı) Emergent'in yönettiği e-posta servisiyle çalışır. Yerel kurulumda `EMERGENT_EMAIL_KEY` boşsa e-posta gitmez; 2FA kodu backend logunda görünür. Kendi kurumsal e-postanızı bağlamak isterseniz SMTP/Resend entegrasyonu eklenebilir.
 
 ### 3. Frontend
