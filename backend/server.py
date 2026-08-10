@@ -128,12 +128,15 @@ def declaration_view(doc: dict) -> dict:
     return d
 
 
+_LAST_ACH: dict = {}
+
+
 def payment_view(doc: dict) -> dict:
     p = Payment.from_mongo(doc).model_dump()
     p["bakiye"] = round(p["tutar"] - p["kullanilan"], 2)
     p["ibkb_durum"] = "DUZENLENDI" if p.get("ibkb_duzenlendi") else "DUZENLENMEDI"
     p["zorunlu_bozdurma"] = round(p["tutar"] * 0.30, 2)
-    p["ach_iban_default"] = os.environ.get("DEFAULT_ACH_IBAN", "")
+    p["ach_iban_default"] = _LAST_ACH.get("iban") or os.environ.get("DEFAULT_ACH_IBAN", "")
     return p
 
 
@@ -440,6 +443,8 @@ async def update_ibkb(pid: str, body: IbkbInput, user: dict = Depends(require("b
         raise HTTPException(status_code=404, detail="Bedel bulunamadı")
     upd = body.model_dump(exclude_none=True)
     upd["ibkb_duzenlendi"] = True
+    if upd.get("ach_iban"):
+        _LAST_ACH["iban"] = upd["ach_iban"]
     await db.payments.update_one({"_id": ObjectId(pid)}, {"$set": upd})
     await log_action(user, "IBKB", "GUNCELLE",
         f"{p['gonderen']} bedeli için IBKB bilgileri kaydedildi "
