@@ -31,7 +31,7 @@ export default function Users() {
   const save = async () => {
     try {
       if (form.id) {
-        const body = { name: form.name, role: form.role, active: form.active };
+        const body = { name: form.name, role: form.role, active: form.active, two_factor: form.two_factor };
         if (form.password) body.password = form.password;
         await api.put(`/users/${form.id}`, body);
       } else {
@@ -75,6 +75,7 @@ export default function Users() {
                 <th className="px-3 py-2.5 font-medium">Ad Soyad</th>
                 <th className="px-3 py-2.5 font-medium">E-posta</th>
                 <th className="px-3 py-2.5 font-medium">Rol</th>
+                <th className="px-3 py-2.5 font-medium">2FA</th>
                 <th className="px-3 py-2.5 font-medium">Durum</th>
                 <th className="px-3 py-2.5 font-medium text-right">İşlem</th>
               </tr>
@@ -85,6 +86,9 @@ export default function Users() {
                   <td className="px-3 py-2 font-medium">{u.name}</td>
                   <td className="px-3 py-2 mono text-xs">{u.email}</td>
                   <td className="px-3 py-2">{ROLE_LABELS[u.role] || u.role}</td>
+                  <td className="px-3 py-2 text-xs" data-testid={`user-2fa-${u.id}`}>
+                    {u.two_factor ? "Kod istenir" : "Kapalı"}
+                  </td>
                   <td className="px-3 py-2">
                     <span className={`text-[11px] border px-1.5 py-0.5 rounded-sm ${
                       u.active
@@ -157,11 +161,18 @@ export default function Users() {
               <Field label={form.id ? "Yeni Şifre (boş bırakılırsa değişmez)" : "Şifre *"}
                      v={form.password} t="user-password-input" on={(v) => setForm({ ...form, password: v })} />
               {form.id && (
+                <>
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={!!form.active} data-testid="user-active-checkbox"
                          onChange={(e) => setForm({ ...form, active: e.target.checked })} />
                   Aktif
                 </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={!!form.two_factor} data-testid="user-2fa-checkbox"
+                         onChange={(e) => setForm({ ...form, two_factor: e.target.checked })} />
+                  Girişte e-posta doğrulama kodu istensin (2 adımlı doğrulama)
+                </label>
+                </>
               )}
             </div>
           )}

@@ -8,24 +8,58 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, verifyCode, resendCode } = useAuth();
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [challenge, setChallenge] = useState(null);
+  const [code, setCode] = useState("");
+  const [info, setInfo] = useState("");
 
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await login(email, password);
+      const res = await login(email, password);
+      if (res?.two_factor) {
+        setChallenge(res.challenge_id);
+        setInfo(res.mesaj || "Doğrulama kodu e-posta adresinize gönderildi.");
+      } else {
+        nav("/");
+      }
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitCode = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await verifyCode(challenge, code);
       nav("/");
     } catch (err) {
       setError(errMsg(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const again = async () => {
+    setError("");
+    try {
+      const res = await resendCode(challenge);
+      setChallenge(res.challenge_id);
+      setCode("");
+      setInfo(res.mesaj || "Yeni kod gönderildi.");
+    } catch (err) {
+      setError(errMsg(err));
     }
   };
 
@@ -45,6 +79,51 @@ export default function Login() {
             </div>
           </div>
 
+          {challenge ? (
+            <>
+              <h1 className="text-3xl font-semibold mb-2">Doğrulama Kodu</h1>
+              <p className="text-sm text-muted-foreground mb-8" data-testid="twofa-info">
+                {info} <span className="mono">{email}</span>
+              </p>
+              <form onSubmit={submitCode} className="space-y-4" data-testid="twofa-form">
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wide">6 Haneli Kod</Label>
+                  <Input
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    data-testid="twofa-code-input"
+                    className="rounded-sm h-12 mono text-center text-2xl tracking-[0.5em]"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="000000"
+                  />
+                </div>
+                {error && (
+                  <div data-testid="login-error"
+                       className="text-sm text-destructive border border-destructive/30 bg-destructive/5 px-3 py-2 rounded-sm">
+                    {error}
+                  </div>
+                )}
+                <Button type="submit" disabled={busy || code.length !== 6} data-testid="twofa-submit-button"
+                        className="w-full h-11 rounded-sm transition-colors duration-200">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Doğrula ve Giriş Yap"}
+                </Button>
+                <div className="flex justify-between text-xs">
+                  <button type="button" onClick={again} data-testid="twofa-resend-button"
+                          className="text-primary hover:underline">
+                    Kodu tekrar gönder
+                  </button>
+                  <button type="button" data-testid="twofa-back-button"
+                          onClick={() => { setChallenge(null); setCode(""); setError(""); }}
+                          className="text-muted-foreground hover:underline">
+                    Geri dön
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <>
           <h1 className="text-3xl font-semibold mb-2">Oturum Aç</h1>
           <p className="text-sm text-muted-foreground mb-8">
             Operasyon paneline erişmek için giriş yapın.
@@ -92,6 +171,8 @@ export default function Login() {
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Giriş Yap"}
             </Button>
           </form>
+            </>
+          )}
 
           <div className="mt-10 border border-border rounded-sm p-4 text-xs text-muted-foreground space-y-1">
             <div className="font-medium text-foreground mb-1">Demo hesaplar (şifre: Test1234!)</div>
@@ -99,6 +180,10 @@ export default function Login() {
             <div className="mono">banka@ihracat.com — Banka Personeli</div>
             <div className="mono">sef@ihracat.com — Onaylayan (Şef)</div>
             <div className="mono">admin@ihracat.com — Admin / Admin1234!</div>
+            <div className="pt-1">
+              Gerçek e-posta adresiyle açılan hesaplarda giriş sırasında e-postaya 6 haneli
+              doğrulama kodu gönderilir.
+            </div>
           </div>
         </div>
       </div>

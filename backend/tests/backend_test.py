@@ -17,6 +17,23 @@ CREDS = {
     "onaylayan": ("sef@ihracat.com",     "Test1234!"),
     "viewer":    ("viewer@ihracat.com",  "Test1234!"),
 }
+TWOFA_EMAIL = "test2fa@ihracat.com"
+TWOFA_PW = "Test1234!"
+
+
+def _read_last_2fa_code():
+    """Read latest [2FA] line from backend log."""
+    import subprocess
+    for path in ("/var/log/supervisor/backend.err.log", "/var/log/supervisor/backend.out.log"):
+        try:
+            out = subprocess.check_output(
+                f"grep '\\[2FA\\]' {path} | tail -1", shell=True, text=True, timeout=5)
+            if out.strip():
+                # "... [2FA] test2fa@... doğrulama kodu: 123456"
+                return out.strip().split(":")[-1].strip()
+        except Exception:
+            continue
+    return None
 
 
 def _login(email, password):
@@ -92,7 +109,7 @@ class TestDeclarations:
         assert d["kalan"] == 10000.0
         assert d["ithalatci"] == "TEST GmbH"
         assert d["gumruk_mudurlugu_no"] == "GM-42"
-        assert d["ibkb_durum"] == "ALINMADI"
+        assert d["ibkb_durum"] == "DUZENLENMEDI"
         assert d["destek_durum"] == "ALINMADI"
         # destek = %3
         assert abs(d["destek_tutari"] - 300.0) < 0.01
@@ -118,7 +135,7 @@ class TestDeclarations:
                           json=_base_dec(no, "2026-01-01", tutar=5000.0, ibkb=True, destek=True))
         assert r.status_code == 200
         d = r.json()
-        assert d["ibkb_durum"] == "ALINDI" and d["destek_durum"] == "ALINDI"
+        assert d["ibkb_durum"] == "DUZENLENDI" and d["destek_durum"] == "ALINDI"
         assert abs(d["destek_tutari"] - 150.0) < 0.01
         requests.delete(f"{API}/declarations/{d['id']}", headers=_h(tokens["ihracat"]))
 
@@ -149,9 +166,9 @@ class TestDeclarations:
 
     def test_filter_ibkb_destek(self, tokens):
         r = requests.get(f"{API}/declarations", headers=_h(tokens["admin"]),
-                         params={"ibkb": "ALINMADI"})
+                         params={"ibkb": "DUZENLENMEDI"})
         assert r.status_code == 200
-        assert all(d["ibkb_durum"] == "ALINMADI" for d in r.json())
+        assert all(d["ibkb_durum"] == "DUZENLENMEDI" for d in r.json())
         r2 = requests.get(f"{API}/declarations", headers=_h(tokens["admin"]),
                           params={"destek": "ALINMADI"})
         assert all(d["destek_durum"] == "ALINMADI" for d in r2.json())
@@ -329,7 +346,7 @@ class TestReportsAndDashboard:
         headers = [c.value for c in ws[1]]
         expected = ["Beyanname No", "Açılış Tarihi", "Kapanış Tarihi",
                     "Son Kapatma Tarihi (180 gün)", "İthalatçı",
-                    "Gümrük Müdürlüğü No", "IBKB Belgesi",
+                    "Gümrük Müdürlüğü No", "IBKB Belgesi Durumu",
                     "Destek Ödemesi (%3)", "Destek Durumu"]
         for e in expected:
             assert e in headers, f"missing excel header: {e}"
@@ -362,3 +379,158 @@ class TestUsers:
         assert r.status_code == 200 and r.json()["role"] == "banka"
         r = requests.delete(f"{API}/users/{uid}", headers=_h(tokens["admin"]))
         assert r.status_code == 200
+
+
+# ---------- 2FA login flow ----------
+class TestTwoFactor:
+    challenge_id = None
+
+    def test_login_2fa_returns_challenge(self):
+        r = requests.post(f"{API}/auth/login",
+                          json={"email": TWOFA_EMAIL, "password": TWOFA_PW}, timeout=30)
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data.get("two_factor") is True
+        assert data.get("challenge_id")
+        assert "token" not in data
+        self.__class__.challenge_id = data["challenge_id"]
+
+    def test_verify_wrong_code_401(self):
+        assert self.__class__.challenge_id
+        r = requests.post(f"{API}/auth/verify-code",
+                          json={"challenge_id": self.__class__.challenge_id, "code": "000000"})
+        # If real code happens to be 000000, this would be 200 (extremely unlikely)
+        assert r.status_code == 401, r.text
+        assert "hatalı" in r.text.lower()
+
+    def test_verify_correct_code_issues_token(self):
+        import time
+        time.sleep(0.6)  # let backend flush log
+        code = _read_last_2fa_code()
+        assert code and len(code) == 6, f"could not read 2FA code from log: {code!r}"
+        r = requests.post(f"{API}/auth/verify-code",
+                          json={"challenge_id": self.__class__.challenge_id, "code": code})
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data.get("token")
+        assert data["email"] == TWOFA_EMAIL
+        self.__class__.token = data["token"]
+
+    def test_same_code_cannot_be_reused(self):
+        code = _read_last_2fa_code()
+        r = requests.post(f"{API}/auth/verify-code",
+                          json={"challenge_id": self.__class__.challenge_id, "code": code})
+        assert r.status_code == 400, r.text  # used
+
+    def test_resend_creates_new_challenge_invalidates_old(self):
+        import time
+        r = requests.post(f"{API}/auth/login",
+                          json={"email": TWOFA_EMAIL, "password": TWOFA_PW})
+        old_cid = r.json()["challenge_id"]
+        time.sleep(0.6)
+        old_code = _read_last_2fa_code()
+
+        r = requests.post(f"{API}/auth/resend-code", json={"challenge_id": old_cid})
+        assert r.status_code == 200
+        new_cid = r.json()["challenge_id"]
+        assert new_cid != old_cid
+        time.sleep(0.6)
+        new_code = _read_last_2fa_code()
+        assert new_code and new_code != old_code
+
+        # old challenge is 'used' -> 400
+        r = requests.post(f"{API}/auth/verify-code",
+                          json={"challenge_id": old_cid, "code": old_code})
+        assert r.status_code == 400
+
+        # new code works
+        r = requests.post(f"{API}/auth/verify-code",
+                          json={"challenge_id": new_cid, "code": new_code})
+        assert r.status_code == 200
+
+    def test_five_wrong_attempts_locks(self):
+        r = requests.post(f"{API}/auth/login",
+                          json={"email": TWOFA_EMAIL, "password": TWOFA_PW})
+        cid = r.json()["challenge_id"]
+        codes = ["000001", "000002", "000003", "000004", "000005"]
+        last = None
+        for c in codes:
+            last = requests.post(f"{API}/auth/verify-code",
+                                 json={"challenge_id": cid, "code": c})
+        # last (5th wrong) may still be 401; a 6th call should return 429
+        r6 = requests.post(f"{API}/auth/verify-code",
+                           json={"challenge_id": cid, "code": "999999"})
+        assert r6.status_code == 429, f"expected 429 after 5 fails, got {r6.status_code} {r6.text}"
+
+    def test_two_factor_off_account_single_step(self):
+        r = requests.post(f"{API}/auth/login",
+                          json={"email": "admin@ihracat.com", "password": "Admin1234!"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data.get("token")
+        assert not data.get("two_factor")
+
+
+# ---------- admin toggles 2FA flag ----------
+class TestUserTwoFactorToggle:
+    def test_admin_toggle_two_factor(self, tokens):
+        # Create a fresh user (default two_factor=True per server.py)
+        email = f"test_2fa_toggle_{int(datetime.now().timestamp())}@ihracat.com"
+        r = requests.post(f"{API}/users", headers=_h(tokens["admin"]), json={
+            "email": email, "name": "TEST 2FA", "role": "goruntuleyici",
+            "password": "P@ss12345"})
+        assert r.status_code == 200
+        uid = r.json()["id"]
+        assert r.json().get("two_factor") is True
+
+        # Login should now require 2FA
+        r = requests.post(f"{API}/auth/login", json={"email": email, "password": "P@ss12345"})
+        assert r.status_code == 200 and r.json().get("two_factor") is True
+
+        # Turn 2FA OFF
+        r = requests.put(f"{API}/users/{uid}", headers=_h(tokens["admin"]),
+                         json={"two_factor": False})
+        assert r.status_code == 200 and r.json()["two_factor"] is False
+
+        # Login should be single-step now
+        r = requests.post(f"{API}/auth/login", json={"email": email, "password": "P@ss12345"})
+        assert r.status_code == 200
+        assert r.json().get("token")
+        assert not r.json().get("two_factor")
+
+        # cleanup
+        requests.delete(f"{API}/users/{uid}", headers=_h(tokens["admin"]))
+
+
+# ---------- alerts preview + send RBAC ----------
+class TestAlerts:
+    def test_preview_all_roles(self, tokens):
+        for role in ["admin", "ihracat", "banka", "onaylayan", "viewer"]:
+            r = requests.get(f"{API}/alerts/preview", headers=_h(tokens[role]))
+            assert r.status_code == 200, f"{role} {r.text}"
+            data = r.json()
+            for k in ["alicilar", "sayilar", "plan"]:
+                assert k in data
+            for k in ["gecmis", "yaklasan", "ibkb", "destek"]:
+                assert k in data["sayilar"]
+            assert isinstance(data["alicilar"], list)
+            assert data["alicilar"], "recipients list should be non-empty"
+
+    def test_send_rbac_forbidden_roles(self, tokens):
+        for role in ["ihracat", "banka", "viewer"]:
+            r = requests.post(f"{API}/alerts/send", headers=_h(tokens[role]))
+            assert r.status_code == 403, f"{role} should be 403 got {r.status_code}"
+
+    def test_send_by_onaylayan_and_audit(self, tokens):
+        # Single real send (avoid spamming)
+        r = requests.post(f"{API}/alerts/send", headers=_h(tokens["onaylayan"]))
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data.get("sent") is True
+        # audit log should contain Uyarı/EPOSTA entry
+        r = requests.get(f"{API}/audit-logs", headers=_h(tokens["admin"]),
+                         params={"modul": "Uyarı"})
+        assert r.status_code == 200
+        logs = r.json()
+        assert any(l.get("islem") == "EPOSTA" for l in logs), "no audit log for alert send"
+

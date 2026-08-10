@@ -1,17 +1,34 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { FileDown } from "lucide-react";
+import { FileDown, Mail, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { api, errMsg, fmt } from "@/lib/apiClient";
+import { api, errMsg, fmt, can } from "@/lib/apiClient";
+import { useAuth } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 
 export default function Reports() {
+  const { user } = useAuth();
   const [d, setD] = useState(null);
+  const [alert, setAlert] = useState(null);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     api.get("/reports/summary").then(({ data }) => setD(data));
+    api.get("/alerts/preview").then(({ data }) => setAlert(data));
   }, []);
+
+  const sendAlert = async () => {
+    setSending(true);
+    try {
+      const { data } = await api.post("/alerts/send");
+      toast.success(`Uyarı e-postası gönderildi: ${data.to.join(", ")}`);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setSending(false);
+    }
+  };
 
   const exportExcel = async () => {
     try {
@@ -35,6 +52,33 @@ export default function Reports() {
           <FileDown className="h-4 w-4 mr-1.5" /> Banka Bildirim Excel
         </Button>
       </PageHeader>
+
+      {alert && (
+        <div className="border border-border bg-card rounded-sm p-4 mb-4" data-testid="alert-card">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 font-display font-semibold text-sm">
+                <Mail className="h-4 w-4 text-primary" /> Haftalık E-posta Uyarısı
+              </div>
+              <div className="text-xs text-muted-foreground mt-1.5">
+                Alıcı: <span className="mono">{alert.alicilar.join(", ") || "tanımlı değil"}</span> · {alert.plan}
+              </div>
+              <div className="flex flex-wrap gap-4 mt-3 text-xs" data-testid="alert-counts">
+                <span>Süresi geçmiş: <b className="mono">{alert.sayilar.gecmis}</b></span>
+                <span>Süresi yaklaşan: <b className="mono">{alert.sayilar.yaklasan}</b></span>
+                <span>IBKB düzenlenmemiş: <b className="mono">{alert.sayilar.ibkb}</b></span>
+                <span>Destek alınmamış: <b className="mono">{alert.sayilar.destek}</b></span>
+              </div>
+            </div>
+            {can(user, "match") && (
+              <Button variant="outline" className="rounded-sm" onClick={sendAlert} disabled={sending}
+                      data-testid="send-alert-button">
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Mail className="h-4 w-4 mr-1.5" /> Şimdi Gönder</>}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {d && (
         <div className="space-y-4">

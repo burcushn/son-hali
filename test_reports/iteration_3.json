@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 3 focuses on the two new features: (a) 2FA e-mail verification code on login and (b) weekly alert e-mail + Reports 'Şimdi Gönder' button. Backend: added 3 new test classes to /app/backend/tests/backend_test.py (TestTwoFactor, TestUserTwoFactorToggle, TestAlerts) and repaired 4 pre-existing assertions to match current server labels (DUZENLENDI/DUZENLENMEDI, Excel header 'IBKB Belgesi Durumu'). Full pytest run: 42/42 pass. Verified via API: 2FA-off single-step login for admin; 2FA-on login returns {two_factor:true,challenge_id}; wrong code -> 401 'Doğrulama kodu hatalı'; correct code -> token; used code cannot be reused (400); resend-code invalidates old challenge; 5 wrong attempts -> 429; admin PUT /users/{id}{two_factor:false} downgrades to single-step login; /api/alerts/preview returns alicilar/sayilar/plan for all authenticated roles; POST /api/alerts/send RBAC: onaylayan+admin 200 (audit 'Uyarı/EPOSTA' recorded), ihracat/banka/viewer 403 (only 1 real e-mail sent to avoid spam). Frontend (public REACT_APP_BACKEND_URL): admin 2FA-off single-step -> dashboard-page; login routes are /giris and /raporlar and /kullanicilar (data-testids: login-email-input/login-password-input/login-submit-button, twofa-form, twofa-code-input, twofa-submit-button, twofa-resend-button, twofa-back-button, login-error, alert-card, alert-counts, send-alert-button, reports-page, user-2fa-*). Verified: 2FA form appears for test2fa; wrong code shows 'Doğrulama kodu hatalı' in login-error, correct code (read from backend log) reaches dashboard; twofa-back-button returns to password form; twofa-resend-button generates a new code that works while old is invalidated; Users page shows the 2FA column with correct labels ('Kapalı' for 5 demo users, 'Kod istenir' for test2fa); Reports page shows alert-card + alert-counts (Süresi geçmiş:1, Yaklaşan:0, IBKB düzenlenmemiş:4, Destek alınmamış:4) with send-alert-button visible for admin but hidden for viewer.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/users (POST)", "issue": "New users are created with two_factor=True by default (server.py L271). Combined with demo e-mails being non-real, an admin adding a new demo user will lock them out until 2FA is toggled off. Consider defaulting to False or exposing the checkbox in the create dialog."},
+      {"endpoint": "/api/auth/verify-code", "issue": "attempts counter is not incremented before the 429 branch is checked, so effectively the 5th wrong code still returns 401 and the 6th (first call after locked state) returns 429. Behavior matches playbook but message 'Çok fazla hatalı deneme, yeni kod isteyin' could be surfaced earlier."},
+      {"endpoint": "/api/auth/login", "issue": "Still no brute-force lockout on password step (5 failed passwords do not lock account) — playbook mentions temp lock."},
+      {"endpoint": "CORS", "issue": "CORS_ORIGINS defaults to '*' combined with allow_credentials=True is rejected by browsers; app relies on Bearer token via cookie set by server + Authorization header fallback. Works but worth pinning to explicit origin."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Consider defaulting two_factor=False on new users (or add the checkbox to the Yeni Kullanıcı dialog) to avoid lockouts when e-mail is unreachable.",
+    "Consider adding brute-force password lockout at /api/auth/login (5 fails -> temp block) per auth playbook."
+  ],
+  "critical_code_review_comments": [
+    "server.py create_user forces two_factor=True regardless of caller — inconsistent with existing demo seed which uses False. Expose the flag in UserCreate or default to False.",
+    "server.py _create_challenge marks old challenge as 'used' on resend by calling update on the OLD challenge_id but only issues a new one; if resend-code is called with an already-used cid, the endpoint still succeeds. Consider rejecting resend for used/expired challenges.",
+    "alerts.send_code failure is silently ignored (returns False) — /api/auth/login still returns two_factor=True with a challenge_id even when the e-mail wasn't delivered; user has no way to know. Consider surfacing a warning or falling back to resend UI hint."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (42/42 pytest)", "frontend": "100% on tested 2FA + alerts flows"},
+  "seed_data_creation": "Ephemeral TEST_* declarations, payments, and a TEST 2FA user created via API and cleaned up in tests. test2fa@ihracat.com account preserved as instructed.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@ihracat.com/Admin1234! (2FA off), test2fa@ihracat.com/Test1234! (2FA on), ihracat@/banka@/sef@/viewer@ihracat.com Test1234! (2FA off). 2FA code readable via: grep '\\[2FA\\]' /var/log/supervisor/backend.err.log | tail -1",
+  "context_for_next_testing_agent": "Frontend routes are /giris (login), /raporlar (Reports), /kullanicilar (Users) — NOT /login, /reports, /users. Login field testids: login-email-input, login-password-input, login-submit-button. 2FA testids: twofa-form, twofa-code-input, twofa-submit-button, twofa-resend-button, twofa-back-button, login-error. Alerts: alert-card, alert-counts, alert-recipients (if present), send-alert-button. Users: user-2fa-<id> for column, user-2fa-checkbox in edit dialog, edit-user-<id> for the pencil button (NOT user-edit-*). POST /api/alerts/send does a REAL e-mail via Emergent Resend proxy — call at most once per iteration.",
+  "rca_of_the_issue": "No blocking issues found. Minor tightening opportunities (2FA default for new users, brute-force password lockout, resend on already-used cid) documented above for the developer agent."
+}

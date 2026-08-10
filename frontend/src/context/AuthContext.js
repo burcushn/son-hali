@@ -18,8 +18,22 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
+    if (data.two_factor) return data;
     if (data.token) localStorage.setItem("token", data.token);
     setUser(data);
+    return data;
+  };
+
+  const verifyCode = async (challenge_id, code) => {
+    const { data } = await api.post("/auth/verify-code", { challenge_id, code });
+    if (data.token) localStorage.setItem("token", data.token);
+    setUser(data);
+    return data;
+  };
+
+  const resendCode = async (challenge_id) => {
+    const { data } = await api.post("/auth/resend-code", { challenge_id });
+    return data;
   };
 
   const logout = async () => {
@@ -31,7 +45,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ user, loading, login, logout, errMsg }}>
+    <AuthCtx.Provider value={{ user, loading, login, logout, verifyCode, resendCode, errMsg }}>
       {children}
     </AuthCtx.Provider>
   );

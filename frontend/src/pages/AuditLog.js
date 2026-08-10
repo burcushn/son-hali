@@ -3,7 +3,7 @@ import { api, fmtDateTime } from "@/lib/apiClient";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 
-const MODULES = ["", "Beyanname", "Bedel", "Eşleştirme", "Kullanıcı", "Excel"];
+const MODULES = ["", "Beyanname", "Bedel", "Eşleştirme", "Kullanıcı", "Excel", "Uyarı"];
 
 export default function AuditLog() {
   const [logs, setLogs] = useState([]);

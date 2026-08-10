@@ -49,6 +49,7 @@ class User(BaseDocument):
     name: str
     role: str
     active: bool = True
+    two_factor: bool = True
     created_at: str = Field(default_factory=utcnow_iso)
 
 
@@ -63,12 +64,22 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
     active: Optional[bool] = None
+    two_factor: Optional[bool] = None
     password: Optional[str] = None
 
 
 class LoginInput(BaseModel):
     email: str
     password: str
+
+
+class VerifyCodeInput(BaseModel):
+    challenge_id: str
+    code: str
+
+
+class ResendCodeInput(BaseModel):
+    challenge_id: str
 
 
 class DeclarationInput(BaseModel):

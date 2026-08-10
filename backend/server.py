@@ -11,6 +11,7 @@ from datetime import datetime, timezone, timedelta
 
 import bcrypt
 import jwt
+import secrets
 from bson import ObjectId
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
 from fastapi.responses import StreamingResponse
@@ -20,10 +21,14 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 
 from models import (
-    User, UserCreate, UserUpdate, LoginInput, Declaration, DeclarationInput,
-    Payment, PaymentInput, Match, MatchInput, ROLES, ROLE_LABELS, utcnow_iso,
+    User, UserCreate, UserUpdate, LoginInput, VerifyCodeInput, ResendCodeInput,
+    Declaration, DeclarationInput, Payment, PaymentInput, Match, MatchInput,
+    ROLES, ROLE_LABELS, utcnow_iso,
 )
 import tcmb
+import alerts
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -164,6 +169,29 @@ async def recalc_payment(pid: str):
 
 
 # ---------------- auth ----------------
+def _issue_session(user: dict, response: Response) -> dict:
+    token = create_access_token(str(user["_id"]), user["email"])
+    response.set_cookie("access_token", token, httponly=True, secure=True,
+                        samesite="none", max_age=43200, path="/")
+    u = dict(user)
+    u["_id"] = str(u["_id"])
+    u.pop("password_hash", None)
+    return {**User.from_mongo(u).model_dump(), "token": token}
+
+
+async def _create_challenge(user: dict) -> str:
+    code = f"{secrets.randbelow(1000000):06d}"
+    res = await db.login_challenges.insert_one({
+        "user_id": str(user["_id"]), "email": user["email"],
+        "code_hash": hash_password(code), "attempts": 0,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
+        "used": False, "created_at": utcnow_iso(),
+    })
+    logger.info(f"[2FA] {user['email']} doğrulama kodu: {code}")
+    await alerts.send_code(user["email"], user.get("name", ""), code)
+    return str(res.inserted_id)
+
+
 @api.post("/auth/login")
 async def login(body: LoginInput, response: Response):
     email = body.email.strip().lower()
@@ -172,12 +200,46 @@ async def login(body: LoginInput, response: Response):
         raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı")
     if not user.get("active", True):
         raise HTTPException(status_code=403, detail="Hesabınız pasif durumda")
-    token = create_access_token(str(user["_id"]), email)
-    response.set_cookie("access_token", token, httponly=True, secure=True,
-                        samesite="none", max_age=43200, path="/")
-    user["_id"] = str(user["_id"])
-    user.pop("password_hash", None)
-    return {**User.from_mongo(user).model_dump(), "token": token}
+    if not user.get("two_factor", False):
+        return _issue_session(user, response)
+    cid = await _create_challenge(user)
+    return {"two_factor": True, "challenge_id": cid, "email": email,
+            "mesaj": "Doğrulama kodu e-posta adresinize gönderildi (5 dakika geçerli)."}
+
+
+@api.post("/auth/verify-code")
+async def verify_code(body: VerifyCodeInput, response: Response):
+    ch = await db.login_challenges.find_one({"_id": ObjectId(body.challenge_id)})
+    if not ch or ch.get("used"):
+        raise HTTPException(status_code=400, detail="Doğrulama isteği geçersiz, tekrar giriş yapın")
+    exp = ch["expires_at"]
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Kodun süresi doldu, yeni kod isteyin")
+    if ch.get("attempts", 0) >= 5:
+        raise HTTPException(status_code=429, detail="Çok fazla hatalı deneme, yeni kod isteyin")
+    if not verify_password(body.code.strip(), ch["code_hash"]):
+        await db.login_challenges.update_one({"_id": ch["_id"]}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=401, detail="Doğrulama kodu hatalı")
+    await db.login_challenges.update_one({"_id": ch["_id"]}, {"$set": {"used": True}})
+    user = await db.users.find_one({"_id": ObjectId(ch["user_id"])})
+    if not user or not user.get("active", True):
+        raise HTTPException(status_code=403, detail="Hesabınız pasif durumda")
+    return _issue_session(user, response)
+
+
+@api.post("/auth/resend-code")
+async def resend_code(body: ResendCodeInput):
+    ch = await db.login_challenges.find_one({"_id": ObjectId(body.challenge_id)})
+    if not ch:
+        raise HTTPException(status_code=400, detail="Doğrulama isteği geçersiz")
+    user = await db.users.find_one({"_id": ObjectId(ch["user_id"])})
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+    await db.login_challenges.update_one({"_id": ch["_id"]}, {"$set": {"used": True}})
+    cid = await _create_challenge(user)
+    return {"challenge_id": cid, "mesaj": "Yeni doğrulama kodu gönderildi."}
 
 
 @api.post("/auth/logout")
@@ -206,6 +268,7 @@ async def create_user(body: UserCreate, user: dict = Depends(require())):
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı")
     doc = {"email": email, "name": body.name, "role": body.role, "active": True,
+           "two_factor": True,
            "password_hash": hash_password(body.password), "created_at": utcnow_iso()}
     res = await db.users.insert_one(doc)
     await log_action(user, "Kullanıcı", "EKLE", f"{body.name} ({ROLE_LABELS[body.role]}) eklendi", str(res.inserted_id))
@@ -574,6 +637,36 @@ async def reports_summary(user: dict = Depends(get_current_user)):
             "ay": sorted(by_month.values(), key=lambda x: x["ay"])[-12:]}
 
 
+@api.get("/alerts/preview")
+async def alerts_preview(user: dict = Depends(get_current_user)):
+    decs = [declaration_view(d) for d in await db.declarations.find({}).to_list(5000)]
+    _, counts = alerts.build_html(decs)
+    return {"alicilar": alerts.recipients(), "sayilar": counts,
+            "plan": "Her Pazartesi 09:00 (haftalık özet)"}
+
+
+@api.post("/alerts/send")
+async def alerts_send(user: dict = Depends(require("onaylayan"))):
+    decs = [declaration_view(d) for d in await db.declarations.find({}).to_list(5000)]
+    res = await alerts.send_alert(decs)
+    if not res.get("sent"):
+        raise HTTPException(status_code=502, detail=res.get("reason", "E-posta gönderilemedi"))
+    await log_action(user, "Uyarı", "EPOSTA",
+                     f"Haftalık uyarı e-postası gönderildi: {', '.join(res['to'])}")
+    return res
+
+
+async def weekly_alert_job():
+    decs = [declaration_view(d) for d in await db.declarations.find({}).to_list(5000)]
+    res = await alerts.send_alert(decs)
+    await db.audit_logs.insert_one({
+        "modul": "Uyarı", "islem": "EPOSTA",
+        "aciklama": ("Haftalık uyarı e-postası otomatik gönderildi"
+                     if res.get("sent") else f"Otomatik e-posta gönderilemedi: {res.get('reason')}"),
+        "ref": "", "kullanici_ad": "Sistem", "kullanici_rol": "sistem", "tarih": utcnow_iso(),
+    })
+
+
 app.include_router(api)
 app.add_middleware(
     CORSMiddleware,
@@ -588,13 +681,14 @@ app.add_middleware(
 async def startup():
     await db.users.create_index("email", unique=True)
     await db.declarations.create_index("beyanname_no", unique=True)
+    await db.login_challenges.create_index("expires_at", expireAfterSeconds=600)
     admin_email = os.environ["ADMIN_EMAIL"].lower()
     admin_pw = os.environ["ADMIN_PASSWORD"]
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
         await db.users.insert_one({"email": admin_email, "password_hash": hash_password(admin_pw),
                                    "name": "Sistem Yöneticisi", "role": "admin", "active": True,
-                                   "created_at": utcnow_iso()})
+                                   "two_factor": False, "created_at": utcnow_iso()})
     elif not verify_password(admin_pw, existing["password_hash"]):
         await db.users.update_one({"email": admin_email},
                                   {"$set": {"password_hash": hash_password(admin_pw)}})
@@ -606,7 +700,12 @@ async def startup():
         if not await db.users.find_one({"email": email}):
             await db.users.insert_one({"email": email, "password_hash": hash_password("Test1234!"),
                                        "name": name, "role": role, "active": True,
-                                       "created_at": utcnow_iso()})
+                                       "two_factor": False, "created_at": utcnow_iso()})
+    scheduler = AsyncIOScheduler(timezone="Europe/Istanbul")
+    scheduler.add_job(weekly_alert_job, CronTrigger(day_of_week="mon", hour=9, minute=0),
+                      id="weekly_alert", replace_existing=True)
+    scheduler.start()
+    app.state.scheduler = scheduler
 
 
 @app.on_event("shutdown")
