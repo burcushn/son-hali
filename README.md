@@ -36,6 +36,10 @@ EMAIL_FROM_NAME="Firma Adı - İhracat Bedeli Takip"
 ALERT_EMAILS="uyari-alacak-adres@firmaniz.com"
 SEED_DEMO_USERS="false"
 DEFAULT_ACH_IBAN="TR00 0000 0000 0000 0000 0000 00"
+AUDIT_RETENTION_DAYS="30"
+```
+
+> `AUDIT_RETENTION_DAYS`: hareket geçmişi kaç gün saklanacak (varsayılan 30). Her gün 03:30'da bu süreden eski kayıtlar otomatik silinir; admin ekrandan manuel de temizleyebilir.
 ```
 
 > `DEFAULT_ACH_IBAN`: bozdurulan TL'nin yattığı sabit TL IBAN. Excel'in "KULLANILACAK ACH" kolonu bu değerden gelir; kayıt bazında IBKB ekranından değiştirilebilir. Ödemenin geldiği döviz IBAN'ı (KULLANILACAK DTH) ise bedel girişi ekranında yazılır.

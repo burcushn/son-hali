@@ -892,6 +892,14 @@ async def weekly_alert_job():
     })
 
 
+async def audit_cleanup_job():
+    days = int(os.environ.get("AUDIT_RETENTION_DAYS", "30"))
+    limit = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    res = await db.audit_logs.delete_many({"tarih": {"$lt": limit}})
+    if res.deleted_count:
+        logger.info(f"[AUDIT] {res.deleted_count} kayıt silindi ({days} günden eski)")
+
+
 app.include_router(api)
 app.add_middleware(
     CORSMiddleware,
@@ -931,6 +939,8 @@ async def startup():
     scheduler = AsyncIOScheduler(timezone="Europe/Istanbul")
     scheduler.add_job(weekly_alert_job, CronTrigger(day_of_week="mon", hour=9, minute=0),
                       id="weekly_alert", replace_existing=True)
+    scheduler.add_job(audit_cleanup_job, CronTrigger(hour=3, minute=30),
+                      id="audit_cleanup", replace_existing=True)
     scheduler.start()
     app.state.scheduler = scheduler
 

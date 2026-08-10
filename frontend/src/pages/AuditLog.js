@@ -40,7 +40,7 @@ export default function AuditLog() {
     <div data-testid="audit-page">
       <PageHeader
         title="Hareket Geçmişi"
-        desc="Tüm ekleme, güncelleme, silme ve eşleştirme işlemleri · kayıtlar çok az yer kaplar, saklamanız önerilir"
+        desc="Tüm ekleme, güncelleme, silme ve eşleştirme işlemleri · kayıtlar 30 gün saklanır, sonra otomatik silinir"
       >
         {user?.role === "admin" && (
           <Button variant="outline" className="rounded-sm" onClick={clean} data-testid="clear-audit-button">

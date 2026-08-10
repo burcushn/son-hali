@@ -68,6 +68,8 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 
 - **Hareket geçmişi temizleme:** `DELETE /api/audit-logs?older_than_days=N` (sadece admin) + Hareket Geçmişi ekranında "Eski Kayıtları Temizle" butonu.
 
+- **Hareket geçmişi**: kayıtlar `AUDIT_RETENTION_DAYS` (varsayılan 30) gün saklanır, her gün 03:30'da eski kayıtlar otomatik silinir; admin manuel temizleyebilir.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)
