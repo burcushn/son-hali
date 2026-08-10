@@ -93,6 +93,8 @@ class DeclarationInput(BaseModel):
     tutar: float
     ibkb_alindi: bool = False
     destek_alindi: bool = False
+    tesvik: bool = False
+    taahhut: bool = False
     notlar: Optional[str] = ""
 
 
@@ -107,6 +109,8 @@ class Declaration(BaseDocument):
     kapatilan: float = 0.0
     ibkb_alindi: bool = False
     destek_alindi: bool = False
+    tesvik: bool = False
+    taahhut: bool = False
     notlar: str = ""
     durum: str = "ACIK"
     created_at: str = Field(default_factory=utcnow_iso)
@@ -131,8 +135,26 @@ class Payment(BaseDocument):
     kullanilan: float = 0.0
     aciklama: str = ""
     durum: str = "KULLANILMADI"
+    # IBKB ekranından girilen bilgiler
+    ibkb_duzenlendi: bool = False
+    ibkb_no: str = ""
+    ibkb_tarihi: str = ""
+    dosya_referansi: str = ""
+    dth_tutar: float = 0.0
+    ach_tutar: float = 0.0
+    tcmb_devir_orani: float = 100.0
     created_at: str = Field(default_factory=utcnow_iso)
     created_by: str = ""
+
+
+class IbkbInput(BaseModel):
+    ibkb_duzenlendi: bool = True
+    ibkb_no: str = ""
+    ibkb_tarihi: str = ""
+    dosya_referansi: str = ""
+    dth_tutar: float = 0.0
+    ach_tutar: float = 0.0
+    tcmb_devir_orani: float = 100.0
 
 
 class MatchInput(BaseModel):

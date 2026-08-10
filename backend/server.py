@@ -22,8 +22,8 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 from models import (
     User, UserCreate, UserUpdate, LoginInput, VerifyCodeInput, ResendCodeInput,
-    Declaration, DeclarationInput, Payment, PaymentInput, Match, MatchInput,
-    ROLES, ROLE_LABELS, utcnow_iso,
+    Declaration, DeclarationInput, Payment, PaymentInput, IbkbInput,
+    Match, MatchInput, ROLES, ROLE_LABELS, utcnow_iso,
 )
 import tcmb
 import alerts
@@ -131,6 +131,8 @@ def declaration_view(doc: dict) -> dict:
 def payment_view(doc: dict) -> dict:
     p = Payment.from_mongo(doc).model_dump()
     p["bakiye"] = round(p["tutar"] - p["kullanilan"], 2)
+    p["ibkb_durum"] = "DUZENLENDI" if p.get("ibkb_duzenlendi") else "DUZENLENMEDI"
+    p["zorunlu_bozdurma"] = round(p["tutar"] * 0.30, 2)
     return p
 
 
@@ -429,6 +431,23 @@ async def delete_payment(pid: str, user: dict = Depends(require("banka"))):
     return {"ok": True}
 
 
+# ---------------- IBKB ----------------
+@api.put("/payments/{pid}/ibkb")
+async def update_ibkb(pid: str, body: IbkbInput, user: dict = Depends(require("banka"))):
+    p = await db.payments.find_one({"_id": ObjectId(pid)})
+    if not p:
+        raise HTTPException(status_code=404, detail="Bedel bulunamadı")
+    toplam = round(body.dth_tutar + body.ach_tutar, 2)
+    if toplam > p["tutar"] + 0.01:
+        raise HTTPException(status_code=400,
+            detail=f"DTH + ACH toplamı gelen bedeli aşamaz ({p['tutar']:,.2f} {p['doviz']})")
+    await db.payments.update_one({"_id": ObjectId(pid)}, {"$set": body.model_dump()})
+    await log_action(user, "IBKB", "GUNCELLE",
+        f"{p['gonderen']} bedeli için IBKB bilgileri kaydedildi "
+        f"(IBKB No: {body.ibkb_no or '-'}, Dosya Ref: {body.dosya_referansi or '-'})", pid)
+    return payment_view(await db.payments.find_one({"_id": ObjectId(pid)}))
+
+
 # ---------------- rates ----------------
 @api.get("/rates")
 async def rates(date: str = "", from_cur: str = "USD", to_cur: str = "EUR",
@@ -573,6 +592,13 @@ async def audit_logs(modul: str = "", limit: int = 200, user: dict = Depends(get
 HDR_FILL = PatternFill("solid", fgColor="4338CA")
 
 
+def _tr_date(s: str) -> str:
+    try:
+        return datetime.strptime((s or "")[:10], "%Y-%m-%d").strftime("%d.%m.%Y")
+    except Exception:
+        return s or ""
+
+
 def _style(ws, ncols):
     for c in range(1, ncols + 1):
         cell = ws.cell(row=1, column=c)
@@ -585,35 +611,79 @@ def _style(ws, ncols):
 
 @api.get("/export/excel")
 async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
-    query = {"durum": durum} if durum else {}
-    decs = await db.declarations.find(query).sort("acilis_tarihi", -1).to_list(5000)
+    """Bankanın istediği resmi bildirim şablonu + destek sayfaları."""
     wb = Workbook()
     ws = wb.active
-    ws.title = "Banka Bildirimi"
-    headers = ["Beyanname No", "Açılış Tarihi", "Kapanış Tarihi", "Son Kapatma Tarihi (180 gün)",
-               "İthalatçı", "Gümrük Müdürlüğü No", "Döviz", "Beyanname/Fatura Tutarı",
-               "Kapatılan", "Kalan", "Durum", "Süre Durumu", "IBKB Belgesi Durumu",
-               "Destek Ödemesi (%3)", "Destek Durumu"]
+    ws.title = "BANKA BİLDİRİMİ"
+    headers = ["SIRA NO", "DOSYA REFERANSI", "GÜMRÜK MÜDÜRLÜĞÜ KODU", "GB NO", "GB TARİHİ",
+               "GB'YE SAYILACAK TUTAR", "KULLANILACAK DTH", "KULLANILACAK ACH",
+               "TCMB DEVİR ORANI", "TEŞVİK", "TAAHHÜT"]
     ws.append(headers)
-    for d in decs:
-        v = declaration_view(d)
-        ws.append([v["beyanname_no"], v["acilis_tarihi"], v["kapanis_tarihi"], v["son_kapatma_tarihi"],
-                   v["ithalatci"], v["gumruk_mudurlugu_no"], v["doviz"], v["tutar"], v["kapatilan"],
-                   v["kalan"], v["durum"], v["sure_durum"], v["ibkb_durum"],
-                   v["destek_tutari"], v["destek_durum"]])
-    _style(ws, len(headers))
 
-    ws2 = wb.create_sheet("Eşleştirme Detayı")
-    h2 = ["Beyanname No", "Bedel Gönderen", "Banka", "Bedel Tarihi", "Bedel Dövizi",
-          "Kullanılan Bedel", "Kur", "Kur Kaynağı", "Kapatılan (Beyanname Dövizi)",
-          "Beyanname Dövizi", "İşlem Tarihi", "İşlemi Yapan"]
-    ws2.append(h2)
-    for m in await db.matches.find({}).sort("tarih", -1).to_list(5000):
+    matches = await db.matches.find({}).sort("tarih", 1).to_list(5000)
+    sira, toplam = 0, 0.0
+    for m in matches:
         d = await db.declarations.find_one({"_id": ObjectId(m["declaration_id"])})
         p = await db.payments.find_one({"_id": ObjectId(m["payment_id"])})
         if not d or not p:
             continue
-        ws2.append([d["beyanname_no"], p["gonderen"], p["banka"], p["tarih"], p["doviz"],
+        if durum and d.get("durum") != durum:
+            continue
+        oran = (m["bedel_kullanilan"] / p["tutar"]) if p.get("tutar") else 0
+        sira += 1
+        toplam += m["kapatilan_tutar"]
+        ws.append([
+            sira,
+            p.get("dosya_referansi", ""),
+            d.get("gumruk_mudurlugu_no", ""),
+            d["beyanname_no"],
+            _tr_date(d.get("acilis_tarihi", "")),
+            m["kapatilan_tutar"],
+            round(p.get("dth_tutar", 0) * oran, 2),
+            round(p.get("ach_tutar", 0) * oran, 2),
+            f"%{p.get('tcmb_devir_orani', 100):g}",
+            "EVET" if d.get("tesvik") else "HAYIR",
+            "EVET" if d.get("taahhut") else "HAYIR",
+        ])
+    row = sira + 2
+    ws.cell(row=row, column=1, value="TOPLAM").font = Font(bold=True)
+    c = ws.cell(row=row, column=6, value=round(toplam, 2))
+    c.font = Font(bold=True)
+    c.number_format = "#,##0.00"
+    for r in range(2, sira + 2):
+        for col in (6, 7, 8):
+            ws.cell(row=r, column=col).number_format = "#,##0.00"
+    _style(ws, len(headers))
+
+    query = {"durum": durum} if durum else {}
+    decs = await db.declarations.find(query).sort("acilis_tarihi", -1).to_list(5000)
+    ws1 = wb.create_sheet("Beyanname Listesi")
+    h1 = ["Beyanname No", "Açılış Tarihi", "Kapanış Tarihi", "Son Kapatma Tarihi (180 gün)",
+          "İthalatçı", "Gümrük Müdürlüğü No", "Döviz", "Beyanname/Fatura Tutarı",
+          "Kapatılan", "Kalan", "Durum", "Süre Durumu", "IBKB Belgesi Durumu",
+          "Destek Ödemesi (%3)", "Destek Durumu", "Teşvik", "Taahhüt"]
+    ws1.append(h1)
+    for d in decs:
+        v = declaration_view(d)
+        ws1.append([v["beyanname_no"], v["acilis_tarihi"], v["kapanis_tarihi"], v["son_kapatma_tarihi"],
+                    v["ithalatci"], v["gumruk_mudurlugu_no"], v["doviz"], v["tutar"], v["kapatilan"],
+                    v["kalan"], v["durum"], v["sure_durum"], v["ibkb_durum"],
+                    v["destek_tutari"], v["destek_durum"],
+                    "EVET" if v.get("tesvik") else "HAYIR", "EVET" if v.get("taahhut") else "HAYIR"])
+    _style(ws1, len(h1))
+
+    ws2 = wb.create_sheet("Eşleştirme Detayı")
+    h2 = ["Beyanname No", "Bedel Gönderen", "Banka", "IBKB No", "Dosya Referansı", "Bedel Tarihi",
+          "Bedel Dövizi", "Kullanılan Bedel", "Kur", "Kur Kaynağı",
+          "Kapatılan (Beyanname Dövizi)", "Beyanname Dövizi", "İşlem Tarihi", "İşlemi Yapan"]
+    ws2.append(h2)
+    for m in matches:
+        d = await db.declarations.find_one({"_id": ObjectId(m["declaration_id"])})
+        p = await db.payments.find_one({"_id": ObjectId(m["payment_id"])})
+        if not d or not p:
+            continue
+        ws2.append([d["beyanname_no"], p["gonderen"], p["banka"], p.get("ibkb_no", ""),
+                    p.get("dosya_referansi", ""), p["tarih"], p["doviz"],
                     m["bedel_kullanilan"], m["kur"], m.get("kur_kaynak", ""), m["kapatilan_tutar"],
                     d["doviz"], m["tarih"][:19].replace("T", " "), m.get("kullanici_ad", "")])
     _style(ws2, len(h2))

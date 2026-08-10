@@ -342,14 +342,19 @@ class TestReportsAndDashboard:
         import io
         from openpyxl import load_workbook
         wb = load_workbook(io.BytesIO(r.content))
-        ws = wb.active
+        ws = wb["BANKA BİLDİRİMİ"]
         headers = [c.value for c in ws[1]]
-        expected = ["Beyanname No", "Açılış Tarihi", "Kapanış Tarihi",
-                    "Son Kapatma Tarihi (180 gün)", "İthalatçı",
-                    "Gümrük Müdürlüğü No", "IBKB Belgesi Durumu",
-                    "Destek Ödemesi (%3)", "Destek Durumu"]
-        for e in expected:
-            assert e in headers, f"missing excel header: {e}"
+        expected = ["SIRA NO", "DOSYA REFERANSI", "GÜMRÜK MÜDÜRLÜĞÜ KODU", "GB NO", "GB TARİHİ",
+                    "GB'YE SAYILACAK TUTAR", "KULLANILACAK DTH", "KULLANILACAK ACH",
+                    "TCMB DEVİR ORANI", "TEŞVİK", "TAAHHÜT"]
+        assert headers[:len(expected)] == expected, headers
+        ws1 = wb["Beyanname Listesi"]
+        h1 = [c.value for c in ws1[1]]
+        for e in ["Beyanname No", "Açılış Tarihi", "Kapanış Tarihi",
+                  "Son Kapatma Tarihi (180 gün)", "İthalatçı", "Gümrük Müdürlüğü No",
+                  "IBKB Belgesi Durumu", "Destek Ödemesi (%3)", "Destek Durumu",
+                  "Teşvik", "Taahhüt"]:
+            assert e in h1, f"missing excel header: {e}"
 
 
 # ---------- users ----------
@@ -533,4 +538,208 @@ class TestAlerts:
         assert r.status_code == 200
         logs = r.json()
         assert any(l.get("islem") == "EPOSTA" for l in logs), "no audit log for alert send"
+
+
+# ---------- IBKB (v3) + Banka Bildirimi Excel şablonu ----------
+class TestIbkbAndBankaBildirimi:
+    dec_id = None
+    dec_no = f"TEST_IBKBFLOW_{int(datetime.now().timestamp())}"
+    pay_eur_id = None
+    pay_usd_id = None
+    match_ids = []
+    acilis = "2026-04-02"
+
+    def test_seed(self, tokens):
+        # Beyanname (EUR 10000)
+        r = requests.post(f"{API}/declarations", headers=_h(tokens["ihracat"]),
+                          json={**_base_dec(self.__class__.dec_no, self.acilis,
+                                            doviz="EUR", tutar=10000.0,
+                                            ithalatci="TEST IBKB GmbH", gumruk="GM-IBKB"),
+                                "tesvik": True, "taahhut": True})
+        assert r.status_code == 200, r.text
+        self.__class__.dec_id = r.json()["id"]
+
+        # EUR bedel 6000
+        r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+            "banka": "Ziraat", "gonderen": "TEST IBKB EUR",
+            "tarih": self.acilis, "doviz": "EUR", "tutar": 6000.0})
+        assert r.status_code == 200
+        self.__class__.pay_eur_id = r.json()["id"]
+
+        # USD bedel 9000
+        r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+            "banka": "Is Bankasi", "gonderen": "TEST IBKB USD",
+            "tarih": self.acilis, "doviz": "USD", "tutar": 9000.0})
+        assert r.status_code == 200
+        self.__class__.pay_usd_id = r.json()["id"]
+
+    def test_ibkb_payment_view_defaults(self, tokens):
+        r = requests.get(f"{API}/payments", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        p = next(x for x in r.json() if x["id"] == self.__class__.pay_eur_id)
+        assert p["ibkb_durum"] == "DUZENLENMEDI"
+        # zorunlu bozdurma = %30
+        assert abs(p["zorunlu_bozdurma"] - 1800.0) < 0.01
+        assert p["tcmb_devir_orani"] == 100.0
+
+    def test_ibkb_rbac_forbidden_roles(self, tokens):
+        payload = {"ibkb_no": "IBKB-1", "ibkb_tarihi": "2026-04-03",
+                   "dosya_referansi": "REF-1", "dth_tutar": 100, "ach_tutar": 100,
+                   "tcmb_devir_orani": 100}
+        for role in ["ihracat", "onaylayan", "viewer"]:
+            r = requests.put(f"{API}/payments/{self.__class__.pay_eur_id}/ibkb",
+                             headers=_h(tokens[role]), json=payload)
+            assert r.status_code == 403, f"{role} should be 403, got {r.status_code}"
+
+    def test_ibkb_validation_overflow(self, tokens):
+        # DTH + ACH > tutar (6000 EUR) -> 400
+        r = requests.put(f"{API}/payments/{self.__class__.pay_eur_id}/ibkb",
+                         headers=_h(tokens["banka"]),
+                         json={"ibkb_no": "IBKB-1", "ibkb_tarihi": "2026-04-03",
+                               "dosya_referansi": "REF-1",
+                               "dth_tutar": 5000, "ach_tutar": 2000,
+                               "tcmb_devir_orani": 100})
+        assert r.status_code == 400, r.text
+        assert "aş" in r.text.lower() or "dth" in r.text.lower()
+
+    def test_banka_can_save_ibkb(self, tokens):
+        # EUR bedel: dth=1800, ach=1800 (toplam 3600 <= 6000)
+        r = requests.put(f"{API}/payments/{self.__class__.pay_eur_id}/ibkb",
+                         headers=_h(tokens["banka"]),
+                         json={"ibkb_duzenlendi": True, "ibkb_no": "IBKB-EUR-1",
+                               "ibkb_tarihi": "2026-04-03",
+                               "dosya_referansi": "DOSYA-EUR-1",
+                               "dth_tutar": 1800, "ach_tutar": 1800,
+                               "tcmb_devir_orani": 100})
+        assert r.status_code == 200, r.text
+        p = r.json()
+        assert p["ibkb_durum"] == "DUZENLENDI"
+        assert p["ibkb_no"] == "IBKB-EUR-1"
+        assert p["dosya_referansi"] == "DOSYA-EUR-1"
+        assert p["dth_tutar"] == 1800 and p["ach_tutar"] == 1800
+        assert p["tcmb_devir_orani"] == 100
+
+        # USD bedel: dth=2700, ach=0
+        r = requests.put(f"{API}/payments/{self.__class__.pay_usd_id}/ibkb",
+                         headers=_h(tokens["admin"]),
+                         json={"ibkb_duzenlendi": True, "ibkb_no": "IBKB-USD-1",
+                               "ibkb_tarihi": "2026-04-03",
+                               "dosya_referansi": "DOSYA-USD-1",
+                               "dth_tutar": 2700, "ach_tutar": 0,
+                               "tcmb_devir_orani": 100})
+        assert r.status_code == 200
+
+    def test_create_matches(self, tokens):
+        # EUR->EUR match 3000
+        r = requests.post(f"{API}/matches", headers=_h(tokens["onaylayan"]), json={
+            "declaration_id": self.__class__.dec_id,
+            "payment_id": self.__class__.pay_eur_id,
+            "kapatilan_tutar": 3000.0})
+        assert r.status_code == 200, r.text
+        self.__class__.match_ids.append(r.json()["id"])
+
+        # USD->EUR match 1000 (manual kur 1.1 to avoid TCMB dependency)
+        r = requests.post(f"{API}/matches", headers=_h(tokens["onaylayan"]), json={
+            "declaration_id": self.__class__.dec_id,
+            "payment_id": self.__class__.pay_usd_id,
+            "kapatilan_tutar": 1000.0, "kur": 0.9})
+        assert r.status_code == 200, r.text
+        self.__class__.match_ids.append(r.json()["id"])
+
+    def test_excel_banka_bildirimi_shape(self, tokens):
+        r = requests.get(f"{API}/export/excel", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        import io as _io
+        from openpyxl import load_workbook
+        wb = load_workbook(_io.BytesIO(r.content))
+        assert "BANKA BİLDİRİMİ" in wb.sheetnames
+        assert wb.sheetnames[0] == "BANKA BİLDİRİMİ"
+        assert "Beyanname Listesi" in wb.sheetnames
+        assert "Eşleştirme Detayı" in wb.sheetnames
+
+        ws = wb["BANKA BİLDİRİMİ"]
+        expected = ["SIRA NO", "DOSYA REFERANSI", "GÜMRÜK MÜDÜRLÜĞÜ KODU", "GB NO",
+                    "GB TARİHİ", "GB'YE SAYILACAK TUTAR", "KULLANILACAK DTH",
+                    "KULLANILACAK ACH", "TCMB DEVİR ORANI", "TEŞVİK", "TAAHHÜT"]
+        headers = [c.value for c in ws[1]]
+        assert headers == expected, headers
+
+        # Find our two rows by GB NO
+        our_rows = []
+        toplam_row = None
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if row[0] == "TOPLAM":
+                toplam_row = row
+                continue
+            if row[3] == self.__class__.dec_no:
+                our_rows.append(row)
+        assert len(our_rows) == 2, f"expected 2 matching rows, got {len(our_rows)}"
+
+        # Sıra artıyor
+        siras = [r[0] for r in our_rows]
+        assert all(isinstance(s, int) and s > 0 for s in siras)
+
+        for row in our_rows:
+            # dosya referansı bedelden
+            assert row[1] in ("DOSYA-EUR-1", "DOSYA-USD-1"), row
+            assert row[2] == "GM-IBKB"
+            assert row[3] == self.__class__.dec_no
+            # GB tarihi dd.mm.yyyy
+            assert row[4] == "02.04.2026", row[4]
+            assert row[8] == "%100"
+            assert row[9] == "EVET"  # tesvik
+            assert row[10] == "EVET"  # taahhut
+
+        # EUR row (kapatilan 3000, dth=1800*3000/6000=900, ach=900)
+        eur_row = next(r for r in our_rows if r[1] == "DOSYA-EUR-1")
+        assert abs(eur_row[5] - 3000.0) < 0.01
+        assert abs(eur_row[6] - 900.0) < 0.02
+        assert abs(eur_row[7] - 900.0) < 0.02
+
+        # USD row: kapatilan 1000 EUR, bedel_kullanilan = 1000/0.9 ~ 1111.11
+        # oran = 1111.11/9000 = 0.12346; dth = 2700*oran ~ 333.33; ach = 0
+        usd_row = next(r for r in our_rows if r[1] == "DOSYA-USD-1")
+        assert abs(usd_row[5] - 1000.0) < 0.01
+        assert abs(usd_row[6] - 333.33) < 1.0
+        assert abs(usd_row[7] - 0.0) < 0.01
+
+        assert toplam_row is not None
+        # TOPLAM col F must include our two matches (3000 + 1000 = 4000);
+        # parallel test classes may add unrelated matches so use >=.
+        assert toplam_row[5] >= 4000.0 - 0.01, toplam_row
+
+        # Beyanname Listesi tesvik/taahhut kolonları
+        ws1 = wb["Beyanname Listesi"]
+        h1 = [c.value for c in ws1[1]]
+        assert "Teşvik" in h1 and "Taahhüt" in h1
+
+        # Eşleştirme Detayı IBKB No + Dosya Ref kolonları
+        ws2 = wb["Eşleştirme Detayı"]
+        h2 = [c.value for c in ws2[1]]
+        assert "IBKB No" in h2 and "Dosya Referansı" in h2
+
+    def test_declaration_view_returns_tesvik_taahhut(self, tokens):
+        r = requests.get(f"{API}/declarations", headers=_h(tokens["admin"]),
+                         params={"q": self.__class__.dec_no})
+        assert r.status_code == 200
+        d = next(x for x in r.json() if x["id"] == self.__class__.dec_id)
+        assert d.get("tesvik") is True
+        assert d.get("taahhut") is True
+
+    def test_audit_has_ibkb_module(self, tokens):
+        r = requests.get(f"{API}/audit-logs", headers=_h(tokens["admin"]),
+                         params={"modul": "IBKB"})
+        assert r.status_code == 200
+        logs = r.json()
+        assert any(l.get("modul") == "IBKB" for l in logs), "IBKB audit log missing"
+
+    def test_cleanup(self, tokens):
+        for mid in self.__class__.match_ids:
+            requests.delete(f"{API}/matches/{mid}", headers=_h(tokens["onaylayan"]))
+        requests.delete(f"{API}/declarations/{self.__class__.dec_id}",
+                        headers=_h(tokens["ihracat"]))
+        requests.delete(f"{API}/payments/{self.__class__.pay_eur_id}",
+                        headers=_h(tokens["banka"]))
+        requests.delete(f"{API}/payments/{self.__class__.pay_usd_id}",
+                        headers=_h(tokens["banka"]))
 

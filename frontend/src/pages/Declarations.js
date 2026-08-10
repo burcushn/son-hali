@@ -63,6 +63,8 @@ export default function Declarations() {
       tutar: Number(form.tutar),
       ibkb_alindi: !!form.ibkb_alindi,
       destek_alindi: !!form.destek_alindi,
+      tesvik: !!form.tesvik,
+      taahhut: !!form.taahhut,
       notlar: form.notlar || "",
     };
     try {
@@ -281,6 +283,16 @@ export default function Declarations() {
                 <input type="checkbox" checked={!!form.destek_alindi} data-testid="declaration-destek-checkbox"
                        onChange={(e) => setForm({ ...form, destek_alindi: e.target.checked })} />
                 Destek ödemesi alındı
+              </label>
+              <label className="flex items-center gap-2 text-sm border border-border rounded-sm px-3 h-10">
+                <input type="checkbox" checked={!!form.tesvik} data-testid="declaration-tesvik-checkbox"
+                       onChange={(e) => setForm({ ...form, tesvik: e.target.checked })} />
+                Teşvik (EVET)
+              </label>
+              <label className="flex items-center gap-2 text-sm border border-border rounded-sm px-3 h-10">
+                <input type="checkbox" checked={!!form.taahhut} data-testid="declaration-taahhut-checkbox"
+                       onChange={(e) => setForm({ ...form, taahhut: e.target.checked })} />
+                Taahhüt (EVET)
               </label>
               <div className="sm:col-span-2 space-y-1.5">
                 <Label className="text-xs uppercase tracking-wide">Notlar</Label>

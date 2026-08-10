@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, FileText, Landmark, History, BarChart3, Users, LogOut,
-  Moon, Sun, Menu, X, ShieldCheck,
+  Moon, Sun, Menu, X, ShieldCheck, FileCheck2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ROLE_LABELS } from "@/lib/apiClient";
@@ -12,6 +12,7 @@ const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
   { to: "/beyannameler", label: "Beyanname Yönetimi", icon: FileText, id: "nav-declarations" },
   { to: "/bedeller", label: "Bedel Yönetimi", icon: Landmark, id: "nav-payments" },
+  { to: "/ibkb", label: "IBKB İşlemleri", icon: FileCheck2, id: "nav-ibkb" },
   { to: "/hareketler", label: "Hareket Geçmişi", icon: History, id: "nav-audit" },
   { to: "/raporlar", label: "Raporlar", icon: BarChart3, id: "nav-reports" },
   { to: "/kullanicilar", label: "Kullanıcı Yönetimi", icon: Users, id: "nav-users", adminOnly: true },

@@ -7,6 +7,7 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Declarations from "@/pages/Declarations";
 import Payments from "@/pages/Payments";
+import Ibkb from "@/pages/Ibkb";
 import AuditLog from "@/pages/AuditLog";
 import Reports from "@/pages/Reports";
 import Users from "@/pages/Users";
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/beyannameler" element={<Declarations />} />
             <Route path="/bedeller" element={<Payments />} />
+            <Route path="/ibkb" element={<Ibkb />} />
             <Route path="/hareketler" element={<AuditLog />} />
             <Route path="/raporlar" element={<Reports />} />
             <Route path="/kullanicilar" element={<Protected adminOnly><Users /></Protected>} />
