@@ -60,7 +60,8 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 - **KULLANILACAK ACH** = bozdurulan TL'nin yattığı IBAN → `DEFAULT_ACH_IBAN` env değerinden sabit gelir, IBKB ekranından kayıt bazında değiştirilebilir.
 - Excel'de **başlık satırındaki mavi dolgu kaldırıldı** (banka istemiyor): sade, kalın yazı + ince çerçeve.
 - Eşleştirme Detayı sayfasına DTH IBAN / ACH IBAN kolonları eklendi.
-- **DTH IBAN yalnızca Bedel Yönetimi ekranında** (bedelin geldiği EUR/USD hesabı), **ACH IBAN yalnızca IBKB ekranında** (bozdurulan tutarın geçtiği TL hesabı) girilir.
+- **Excel NOTLAR bloğu:** tablonun altına bankanın şablonundaki taahhütname metni (J sütunu "Döviz Dönüşüm Desteği Talebi" açıklaması + 2 maddelik taahhütname) eklendi. TEŞVİK/TAAHHÜT kolonları banka şablonuna uygun **E/H** olarak yazılıyor.
+- ACH IBAN her IBKB girişinde değiştirilebilir; en son kullanılan TL IBAN ön dolu gelir (çoklu TL hesap desteği).
 - `SEED_DEMO_USERS=false` ile demo hesaplar hiç oluşturulmaz (canlı kullanım için).
 
 ## Backlog

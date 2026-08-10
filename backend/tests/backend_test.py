@@ -728,8 +728,8 @@ class TestIbkbAndBankaBildirimi:
             # GB tarihi dd.mm.yyyy
             assert row[4] == "02.04.2026", row[4]
             assert row[8] == "%100"
-            assert row[9] == "EVET"  # tesvik
-            assert row[10] == "EVET"  # taahhut
+            assert row[9] == "E"  # tesvik (banka şablonunda E/H)
+            assert row[10] == "E"  # taahhut
 
         # EUR row: DTH/ACH artık IBAN metni
         eur_row = next(r for r in our_rows if r[1] == "DOSYA-EUR-1")
