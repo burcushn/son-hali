@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Link2, FileDown, Search } from "lucide-react";
-import { api, errMsg, fmt, fmtDate, CURRENCIES, D_STATUS, can } from "@/lib/apiClient";
+import { api, errMsg, fmt, fmtDate, CURRENCIES, D_STATUS, can, downloadBankExcel } from "@/lib/apiClient";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader, Badge2 } from "@/components/Layout";
 import { MatchDialog } from "@/components/MatchDialog";
@@ -91,14 +91,8 @@ export default function Declarations() {
 
   const exportExcel = async () => {
     try {
-      const res = await api.get("/export/excel", { params: { durum }, responseType: "blob" });
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "banka_bildirim.xlsx";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Excel indirildi");
+      const ok = await downloadBankExcel({ durum });
+      if (ok) toast.success("Excel indirildi");
     } catch (e) {
       toast.error(errMsg(e));
     }

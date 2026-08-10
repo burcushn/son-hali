@@ -696,6 +696,35 @@ def _append_notes(ws, start_row: int, ncols: int):
     return r
 
 
+@api.get("/export/check")
+async def export_check(durum: str = "", user: dict = Depends(get_current_user)):
+    """Excel alınmadan önce banka bildiriminde boş kalacak alanları listeler."""
+    matches = await db.matches.find({}).to_list(5000)
+    eksikler = []
+    for m in matches:
+        d = await db.declarations.find_one({"_id": ObjectId(m["declaration_id"])})
+        p = await db.payments.find_one({"_id": ObjectId(m["payment_id"])})
+        if not d or not p:
+            continue
+        if durum and d.get("durum") != durum:
+            continue
+        alanlar = []
+        if not p.get("dosya_referansi"):
+            alanlar.append("Dosya Referansı")
+        if not d.get("gumruk_mudurlugu_no"):
+            alanlar.append("Gümrük Müdürlüğü Kodu")
+        if not p.get("dth_iban"):
+            alanlar.append("DTH IBAN")
+        if not (p.get("ach_iban") or os.environ.get("DEFAULT_ACH_IBAN", "")):
+            alanlar.append("ACH IBAN")
+        if not p.get("ibkb_duzenlendi"):
+            alanlar.append("IBKB kaydı")
+        if alanlar:
+            eksikler.append({"beyanname_no": d["beyanname_no"], "bedel": p["gonderen"],
+                             "alanlar": alanlar})
+    return {"satir_sayisi": len(matches), "eksik_sayisi": len(eksikler), "eksikler": eksikler[:50]}
+
+
 @api.get("/export/excel")
 async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
     """Bankanın istediği resmi bildirim şablonu + destek sayfaları."""

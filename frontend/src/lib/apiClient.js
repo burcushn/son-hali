@@ -46,6 +46,30 @@ export const ROLE_LABELS = {
   goruntuleyici: "Görüntüleyici",
 };
 
+export async function downloadBankExcel(params = {}) {
+  const { data: check } = await api.get("/export/check", { params });
+  if (check.eksik_sayisi > 0) {
+    const list = check.eksikler
+      .slice(0, 5)
+      .map((e) => `• ${e.beyanname_no} (${e.bedel}): ${e.alanlar.join(", ")}`)
+      .join("\n");
+    const ok = window.confirm(
+      `${check.eksik_sayisi} satırda banka bildiriminde boş kalacak alan var:\n\n${list}` +
+        `${check.eksik_sayisi > 5 ? `\n… ve ${check.eksik_sayisi - 5} satır daha` : ""}` +
+        `\n\nYine de Excel'i indirmek istiyor musunuz?`
+    );
+    if (!ok) return false;
+  }
+  const res = await api.get("/export/excel", { params, responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `banka_bildirim_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return true;
+}
+
 export const can = (user, action) => {
   if (!user) return false;
   if (user.role === "admin") return true;

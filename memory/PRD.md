@@ -64,6 +64,8 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 - ACH IBAN her IBKB girişinde değiştirilebilir; en son kullanılan TL IBAN ön dolu gelir (çoklu TL hesap desteği).
 - `SEED_DEMO_USERS=false` ile demo hesaplar hiç oluşturulmaz (canlı kullanım için).
 
+- **Excel öncesi eksik alan kontrolü:** `GET /api/export/check` ile dosya referansı, gümrük kodu, DTH/ACH IBAN ve IBKB kaydı eksik satırlar listelenir; indirme öncesi kullanıcıya onay sorulur.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { FileDown, Mail, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { api, errMsg, fmt, can } from "@/lib/apiClient";
+import { api, errMsg, fmt, can, downloadBankExcel } from "@/lib/apiClient";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
@@ -32,14 +32,8 @@ export default function Reports() {
 
   const exportExcel = async () => {
     try {
-      const res = await api.get("/export/excel", { responseType: "blob" });
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "banka_bildirim.xlsx";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Excel indirildi");
+      const ok = await downloadBankExcel();
+      if (ok) toast.success("Excel indirildi");
     } catch (e) {
       toast.error(errMsg(e));
     }
