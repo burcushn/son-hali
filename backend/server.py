@@ -649,7 +649,21 @@ NOTES_ITEMS = [
     ("2", "Firmaların Yurt Dışı Kaynaklı Dövizlerinin Türk Lirasına Dönüşümünün Desteklenmesi "
           "Hakkında Tebliğe İlişkin Uygulama Talimatı doğrultusunda, Bankanız aracılığıyla "
           "Türkiye Cumhuriyet Merkez Bankası'na döviz satarak yararlanacağımız döviz dönüşüm "
-          "desteğine ilişkin tüm hükümleri kabul ettiğimizi beyan ederiz."),
+          "desteği tutarı ile ilgili olarak tarafımıza fazla veya yersiz ödeme yapıldığının "
+          "tespit edilmesi halinde, söz konusu tutarı"),
+    ("", "herhangi bir itiraz veya def'i ileri sürmeksizin kayıtsız şartsız, Bankanızın ilk talep "
+         "tarihinden itibaren Bankanıza ödeme yapacağımız tarihe kadar geçecek süreler için "
+         "Bankanızca uygulanacak temerrüt faizi ile birlikte ve bu faizin gider vergisi (BSMV) "
+         "eklenmek suretiyle Bankanıza ödeyeceğimizi, söz konusu tutarları tarafımıza herhangi bir "
+         "bildirimde bulunulmasına gerek olmaksızın Bankanız nezdindeki tüm hesaplarımızdan tahsil "
+         "etmeye, tahsil için hesaplarımız arasında virman veya aktarma yapmaya Bankanızın yetkili "
+         "olduğunu, bu taahhütname kapsamında doğmuş ve doğacak tüm borçlarımız için, Bankanızın "
+         "tüm Şubeleri nezdinde mevcut olan ve olabilecek her türlü mevduat ve alacağımızın, her "
+         "nevi hesaplarımızın ve herhangi bir sebepten dolayı Bankanız nezdinde doğmuş doğacak tüm "
+         "hak ve alacaklarımızın Bankanıza rehinli olduğunu ve bunlar üzerinde Bankanızın rehin, "
+         "hapis, takas mahsup hakkına sahip olduğunu, Bankanız alacağını rehinli alacak veya "
+         "hesaplarımızdan tahsil, takas ve mahsup etmeye Bankanızın yetkili olduğunu gayrikabili "
+         "rücu kabul, beyan ve taahhüt ederiz."),
     ("", "İşbu taahhütname ........... tarihinde imzalanan GNGKS ve ........... tarihinde "
          "imzalanan BHS'nin eki ve ayrılmaz parçasıdır."),
 ]
