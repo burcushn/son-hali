@@ -7,7 +7,6 @@ import { PageHeader, Badge2 } from "@/components/Layout";
 import { Field } from "@/pages/Declarations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -174,21 +173,6 @@ export default function Ibkb() {
                      on={(v) => setForm({ ...form, tcmb_devir_orani: v })} />
               <Field label="ACH IBAN — bozdurulan tutarın geçtiği TL hesabı" v={form.ach_iban}
                      t="ibkb-ach-iban-input" mono on={(v) => setForm({ ...form, ach_iban: v })} />
-              <div className="space-y-1.5">
-                <Label className="text-xs uppercase tracking-wide">
-                  DTH IBAN ({form.doviz}) — Bedel Yönetimi'nden gelir
-                </Label>
-                <div className={`h-10 flex items-center mono text-xs border border-dashed border-border rounded-sm px-3 overflow-hidden ${form.dth_iban ? "" : "italic text-muted-foreground"}`}
-                     data-testid="ibkb-dth-iban">
-                  {form.dth_iban || "Bedel kaydında IBAN girilmemiş"}
-                </div>
-              </div>
-              <div className="sm:col-span-2 text-xs text-muted-foreground border border-border rounded-sm p-2">
-                <b>KULLANILACAK DTH</b>: ihracat bedelinin geldiği döviz hesabı (EUR/USD) — bu IBAN
-                <b> Bedel Yönetimi</b> ekranında bedel girilirken yazılır.
-                <b> KULLANILACAK ACH</b>: bozdurulan tutarın geçirildiği TL hesabı — bu ekranda yazılır.
-                Destek alabilmek için TCMB devir oranı %100 olmalıdır.
-              </div>
             </div>
           )}
           <DialogFooter>
