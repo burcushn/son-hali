@@ -634,16 +634,18 @@ NOTES_TITLE = ("J Sütununda bulunan Döviz Dönüşüm Desteği Talebi kısmın
 NOTES_ITEMS = [
     ("1", "Firmaların Yurt Dışı Kaynaklı Dövizlerinin Türk Lirasına Dönüşümünün Desteklenmesi "
           "Hakkında Tebliğe İlişkin Uygulama Talimatı kapsamında Bankanız aracılığı ile Merkez "
-          "Bankasına satılacak döviz tutarı ile ilgili olarak döviz dönüşüm desteği talep "
-          "ettiğimizi,"),
+          "Bankasına satılacak döviz tutarı ile ilgili olarak döviz dönüşüm desteği imkanından "
+          "yararlanmak üzere;"),
     ("", "- Yurt dışına türev işlem ve/veya kıymetli maden alım-satım amacıyla Türk lirası veya "
          "döviz transferi,"),
     ("", "- Herhangi bir banka ve/veya finansal kurumdan 1 ay boyunca döviz/kıymetli maden alımı"),
     ("", "yapmayacağımızı beyan ve taahhüt ederiz."),
-    ("", "Bu taahhüdün yerine getirilemediğinin tespit edilmesi halinde taahhüdün yerine "
+    ("", "Bu taahhüdün yerine getiremediğimizin tespit edilmesi halinde taahhüdün yerine "
          "getirilmediğinin tespit edildiği tarihten itibaren bir yıl süreyle Merkez Bankası "
-         "kaynaklı kredi kullanım talebinde bulunmayacağımızı ve firmamız hakkında ilgili "
-         "mevzuat hükümlerinin uygulanacağını kabul ettiğimizi beyan ederiz."),
+         "kaynaklı kredi kullanım talebinde bulunmayacağımızı ve firmamıza ödenen döviz dönüşüm "
+         "desteği tutarının söz konusu Uygulama Talimatının 7 inci maddesinde belirtilen yaptırım "
+         "oranı üzerinden hesaplanacak yaptırım tutarını firmamızca Merkez Bankasına iletilmek "
+         "üzere Bankanıza ödeyeceğimizi gayrikabili rücu olarak kabul, beyan ve taahhüt ederiz."),
     ("2", "Firmaların Yurt Dışı Kaynaklı Dövizlerinin Türk Lirasına Dönüşümünün Desteklenmesi "
           "Hakkında Tebliğe İlişkin Uygulama Talimatı doğrultusunda, Bankanız aracılığıyla "
           "Türkiye Cumhuriyet Merkez Bankası'na döviz satarak yararlanacağımız döviz dönüşüm "
