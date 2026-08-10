@@ -172,21 +172,21 @@ export default function Ibkb() {
                      on={(v) => setForm({ ...form, dosya_referansi: v })} />
               <Field label="TCMB Devir Oranı (%)" type="number" v={form.tcmb_devir_orani} t="ibkb-tcmb-input" mono
                      on={(v) => setForm({ ...form, tcmb_devir_orani: v })} />
+              <Field label="ACH IBAN — bozdurulan tutarın geçtiği TL hesabı" v={form.ach_iban}
+                     t="ibkb-ach-iban-input" mono on={(v) => setForm({ ...form, ach_iban: v })} />
               <div className="space-y-1.5">
                 <Label className="text-xs uppercase tracking-wide">
-                  DTH IBAN ({form.doviz}) — bedel girişinden gelir
+                  DTH IBAN ({form.doviz}) — Bedel Yönetimi'nden gelir
                 </Label>
                 <div className={`h-10 flex items-center mono text-xs border border-dashed border-border rounded-sm px-3 overflow-hidden ${form.dth_iban ? "" : "italic text-muted-foreground"}`}
-                     title={form.dth_iban ? "" : "Bedel Yönetimi ekranından IBAN girin"}
                      data-testid="ibkb-dth-iban">
-                  {form.dth_iban || "Bedel kaydında IBAN girilmemiş — Bedel Yönetimi'nden ekleyin"}
+                  {form.dth_iban || "Bedel kaydında IBAN girilmemiş"}
                 </div>
               </div>
-              <Field label="ACH IBAN (bozdurulan TL hesabı)" v={form.ach_iban} t="ibkb-ach-iban-input" mono
-                     on={(v) => setForm({ ...form, ach_iban: v })} />
               <div className="sm:col-span-2 text-xs text-muted-foreground border border-border rounded-sm p-2">
-                Excel'de <b>KULLANILACAK DTH</b> kolonu ödemenin geldiği döviz IBAN'ını,
-                <b> KULLANILACAK ACH</b> kolonu bozdurulan tutarın yattığı TL IBAN'ını gösterir.
+                <b>KULLANILACAK DTH</b>: ihracat bedelinin geldiği döviz hesabı (EUR/USD) — bu IBAN
+                <b> Bedel Yönetimi</b> ekranında bedel girilirken yazılır.
+                <b> KULLANILACAK ACH</b>: bozdurulan tutarın geçirildiği TL hesabı — bu ekranda yazılır.
                 Destek alabilmek için TCMB devir oranı %100 olmalıdır.
               </div>
             </div>
