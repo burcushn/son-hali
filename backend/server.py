@@ -20,7 +20,6 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from starlette.middleware.cors import CORSMiddleware
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
 
 from models import (
     User, UserCreate, UserUpdate, LoginInput, VerifyCodeInput, ResendCodeInput,
@@ -714,74 +713,6 @@ def _style(ws, ncols):
     ws.freeze_panes = "A2"
 
 
-NOTES_TITLE = ("J Sütununda bulunan Döviz Dönüşüm Desteği Talebi kısmını 'E' olarak "
-               "işaretlediğimde aşağıdaki taahhütnameleri okuduğumu ve onayladığımı beyan ederim")
-
-NOTES_ITEMS = [
-    ("1", "Firmaların Yurt Dışı Kaynaklı Dövizlerinin Türk Lirasına Dönüşümünün Desteklenmesi "
-          "Hakkında Tebliğe İlişkin Uygulama Talimatı kapsamında Bankanız aracılığı ile Merkez "
-          "Bankasına satılacak döviz tutarı ile ilgili olarak döviz dönüşüm desteği imkanından "
-          "yararlanmak üzere;"),
-    ("", "- Yurt dışına türev işlem ve/veya kıymetli maden alım-satım amacıyla Türk lirası veya "
-         "döviz transferi,"),
-    ("", "- Herhangi bir banka ve/veya finansal kurumdan 1 ay boyunca döviz/kıymetli maden alımı"),
-    ("", "yapmayacağımızı beyan ve taahhüt ederiz."),
-    ("", "Bu taahhüdün yerine getiremediğimizin tespit edilmesi halinde taahhüdün yerine "
-         "getirilmediğinin tespit edildiği tarihten itibaren bir yıl süreyle Merkez Bankası "
-         "kaynaklı kredi kullanım talebinde bulunmayacağımızı ve firmamıza ödenen döviz dönüşüm "
-         "desteği tutarının söz konusu Uygulama Talimatının 7 inci maddesinde belirtilen yaptırım "
-         "oranı üzerinden hesaplanacak yaptırım tutarını firmamızca Merkez Bankasına iletilmek "
-         "üzere Bankanıza ödeyeceğimizi gayrikabili rücu olarak kabul, beyan ve taahhüt ederiz."),
-    ("2", "Firmaların Yurt Dışı Kaynaklı Dövizlerinin Türk Lirasına Dönüşümünün Desteklenmesi "
-          "Hakkında Tebliğe İlişkin Uygulama Talimatı doğrultusunda, Bankanız aracılığıyla "
-          "Türkiye Cumhuriyet Merkez Bankası'na döviz satarak yararlanacağımız döviz dönüşüm "
-          "desteği tutarı ile ilgili olarak tarafımıza fazla veya yersiz ödeme yapıldığının "
-          "tespit edilmesi halinde, söz konusu tutarı"),
-    ("", "herhangi bir itiraz veya def'i ileri sürmeksizin kayıtsız şartsız, Bankanızın ilk talep "
-         "tarihinden itibaren Bankanıza ödeme yapacağımız tarihe kadar geçecek süreler için "
-         "Bankanızca uygulanacak temerrüt faizi ile birlikte ve bu faizin gider vergisi (BSMV) "
-         "eklenmek suretiyle Bankanıza ödeyeceğimizi, söz konusu tutarları tarafımıza herhangi bir "
-         "bildirimde bulunulmasına gerek olmaksızın Bankanız nezdindeki tüm hesaplarımızdan tahsil "
-         "etmeye, tahsil için hesaplarımız arasında virman veya aktarma yapmaya Bankanızın yetkili "
-         "olduğunu, bu taahhütname kapsamında doğmuş ve doğacak tüm borçlarımız için, Bankanızın "
-         "tüm Şubeleri nezdinde mevcut olan ve olabilecek her türlü mevduat ve alacağımızın, her "
-         "nevi hesaplarımızın ve herhangi bir sebepten dolayı Bankanız nezdinde doğmuş doğacak tüm "
-         "hak ve alacaklarımızın Bankanıza rehinli olduğunu ve bunlar üzerinde Bankanızın rehin, "
-         "hapis, takas mahsup hakkına sahip olduğunu, Bankanız alacağını rehinli alacak veya "
-         "hesaplarımızdan tahsil, takas ve mahsup etmeye Bankanızın yetkili olduğunu gayrikabili "
-         "rücu kabul, beyan ve taahhüt ederiz."),
-    ("", "İşbu taahhütname ........... tarihinde imzalanan GNGKS ve ........... tarihinde "
-         "imzalanan BHS'nin eki ve ayrılmaz parçasıdır."),
-]
-
-
-def _append_notes(ws, start_row: int, ncols: int):
-    """Bankanın şablonundaki NOTLAR / taahhütname bloğu."""
-    thin = Side(style="thin", color="000000")
-    last_col = get_column_letter(ncols)
-
-    c = ws.cell(row=start_row, column=1, value="NOTLAR")
-    c.font = Font(bold=True)
-    c.border = Border(top=thin, bottom=thin, left=thin, right=thin)
-    ws.merge_cells(f"B{start_row}:{last_col}{start_row}")
-    t = ws.cell(row=start_row, column=2, value=NOTES_TITLE)
-    t.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-    t.border = Border(top=thin, bottom=thin, left=thin, right=thin)
-    ws.row_dimensions[start_row].height = 28
-
-    r = start_row + 2
-    for no, text in NOTES_ITEMS:
-        if no:
-            n = ws.cell(row=r, column=1, value=no)
-            n.alignment = Alignment(horizontal="right", vertical="top")
-        ws.merge_cells(f"B{r}:{last_col}{r}")
-        cell = ws.cell(row=r, column=2, value=text)
-        cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
-        ws.row_dimensions[r].height = 15 * max(1, len(text) // 150 + 1)
-        r += 1
-    return r
-
-
 async def _match_maps():
     """Eşleştirmeler için beyanname/bedel sözlükleri (N+1 sorgu yerine tek seferde yükleme)."""
     decs = {str(d["_id"]): d for d in await db.declarations.find({}).to_list(20000)}
@@ -868,7 +799,6 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
     _plain_style(ws, len(headers))
     ws.column_dimensions["G"].width = 32
     ws.column_dimensions["H"].width = 32
-    _append_notes(ws, row + 2, len(headers))
 
     query = {"durum": durum} if durum else {}
     decs = await db.declarations.find(query).sort("acilis_tarihi", -1).to_list(5000)

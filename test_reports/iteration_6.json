@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 6 focuses on 4 changes: (1) BANKA BİLDİRİMİ ilk sayfasından NOTLAR/taahhütname bloğu tamamen kaldırıldı; (2) _match_maps() ile export/check ve export/excel'de N+1 kaldırıldı; (3) /api/dashboard'a bu_ay_kapatilan, bu_ay_islem_sayi, destek_bekleyen_sayi, destek_bekleyen_tutar eklendi; (4) yeni /api/backup (GET, admin) ve /api/backup/restore (POST, admin, multipart) uçları. /app/backend/tests/backend_test.py'a 12 yeni test eklendi: TestIteration6NotesRemoval (2), TestIteration6ExportCheck (2), TestIteration6DashboardExtras (1), TestIteration6Backup (7). Excel ilk sayfası openpyxl ile temiz açılıyor; hiçbir hücrede 'NOTLAR', 'taahhüt ederiz', 'Döviz Dönüşüm Desteği', 'kaşe', 'imza' geçmiyor; merged cell YOK; son dolu satır 'TOPLAM' ile bitiyor. 'Beyanname Listesi' ve 'Eşleştirme Detayı' sayfaları korunmuş (Eşleştirme Detayı başlığı DTH IBAN/ACH IBAN kolonlarını içeriyor). GET /api/export/check 200 dönüyor; şema {satir_sayisi, eksik_sayisi, eksikler[{beyanname_no,bedel,alanlar}]} doğrulandı; auth yoksa 401. GET /api/dashboard 4 yeni alanı içeriyor ve mevcut alanlar (acik, kismi, kapali, acik_tutar, bedel_bakiye, yaklasan, gecmis, son_hareketler) korunmuş. /api/backup: admin dışı roller 403; admin için 200 + application/json + Content-Disposition; JSON payload _meta ve BACKUP_COLLECTIONS (users, declarations, payments, matches, audit_logs) içeriyor; _meta.olusturan == admin@ihracat.com. /api/backup/restore?mode=merge: admin dışı 403; geçersiz dosya 400; sistem yedeği olmayan JSON 400; kendi backup'ını merge ile geri yükleme 200 (idempotent, declaration sayısı artmıyor/azalmıyor). Yedek/geri yükleme audit-log ('Yedek' modülü, INDIR ve GERI_YUKLE) yazılıyor. Toplam pytest: 66/67 PASS. Tek fail: TestAlerts::test_send_by_onaylayan_and_audit — /api/alerts/send 502 dönüyor çünkü Emergent email API key 401 ('API key is invalid') veriyor (backend log'da tespit edildi). Bu iterasyon değişiklikleriyle ilgisiz; env/entegrasyon sorunu.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/alerts/send", "issue": "Emergent email integration returns 401 'API key is invalid' (see backend logs: 'ERROR:alerts:Alert email failed: 401 {\"statusCode\":401,\"name\":\"validation_error\",\"message\":\"API key is invalid\"}'). Bu 2FA email gönderiminde de aynı hatayı üretiyor (login akışı log fallback ile çalışıyor ama gerçek kullanıcı e-postayı görmüyor). Ingress bu upstream 401 sonrası SMTP çağrısı hangi yolda oluyorsa 502 döndürüyor. EMERGENT_EMAIL_KEY yenilenmeli.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/backup/restore", "issue": "restore _id parse hatasında yeni ObjectId üretiyor; aynı yedek iki kez merge edilirse eski _id'siz dokümanlar tekrar yaratılabilir. Şu an yalnızca kendi ürettiği backup ile denendiği için sorun görünmedi, ama farklı kaynak/legacy _id'ler için upsert davranışı gözden geçirilmeli."},
+      {"endpoint": "GET /api/backup", "issue": "Response streaming değil — 200k+ audit_log satırında memory'de tam JSON build ediliyor. Büyük DB'de OOM riski."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "EMERGENT_EMAIL_KEY invalid (401) — rotate/refresh; both 2FA delivery and /api/alerts/send are broken today. Nothing changed in iteration 6 code caused this; it's an environment/integration credential issue.",
+    "(nice-to-have) /api/backup için streaming JSON veya sayfalama ekle; büyük audit_logs koleksiyonu için OOM riskini azaltır.",
+    "(nice-to-have) restore_all: legacy _id parse edilemiyorsa oluşturulan yeni ObjectId ile duplicate insert yerine 'orjinal_id' alanı ile idempotent hale getirmek."
+  ],
+  "critical_code_review_comments": [
+    "server.py export_excel: NOTLAR bloğu tamamen kaldırıldı ve TOPLAM son satır olarak konumlandırıldı — test edildi ve temiz. Ancak ws.column_dimensions ayarları _plain_style içinde 22 karakter, sonra G/H 32'ye override ediliyor; farklı ekranlarda okunabilirliği artırır ancak SIRA NO ve TCMB DEVİR ORANI gibi kısa kolonlar için 22 gereksiz geniş — kolon bazlı optimize edin.",
+    "server.py backup_all: BACKUP_COLLECTIONS listesi hardcoded — future collection eklendiğinde yedeğe girmeyi unutmak kolay; db.list_collection_names() ile whitelist kesişimi almak daha güvenli.",
+    "server.py restore_all: mode='replace' path'inde audit_logs dahil silinip yeniden yazılıyor; bu mode özellikle admin bir yanlış dosya yükleyip 'replace' seçerse veri kaybına yol açar. UI tarafında 'replace' için ikinci onay (typed confirmation) zorunlu tutulmalı ve backend bu isteği require() dışında ek onay parametresi (confirm=REPLACE_ALL) ile korumalı.",
+    "server.py dashboard: bu_ay_kapatilan iso-string tabanlı 'tarih' >= ay_basi filtresi kullanıyor. Eşleştirme tarihi timezone bilgisi olmadan gelirse ay sınırında off-by-one riski var; matches.tarih yazımında always utcnow_iso() kullanıldığından şu an güvenli, ama comment ile açıkça UTC'ye referans verilmesi bakımını kolaylaştırır."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "98.5% (66/67 pass; 12/12 new iteration-6 tests pass)", "frontend": "N/A (backend-only iteration)"},
+  "seed_data_creation": "Iteration-6 testleri idempotent — TestIteration6Backup senaryosu admin yedek indirip aynı yedeği merge modunda tekrar yüklüyor; declaration/payment/user sayıları değişmedi.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@ihracat.com/Admin1234! (yeterli); demo hesaplar preview DB'de mevcut (Test1234!) ve regresyon testleri onları kullanıyor.",
+  "context_for_next_testing_agent": "Iteration-6 testleri backend_test.py'da 'TestIteration6*' isim kalıbı ile toplandı. NOTLAR temizliği için FORBIDDEN_SUBSTR listesi genişletilebilir. /api/alerts/send'de görülen 502 tamamen EMERGENT_EMAIL_KEY 401'inden kaynaklanıyor — bu düzeltilmeden TestAlerts::test_send_by_onaylayan_and_audit fail'e devam edecek. Backup restore roundtrip aynı DB üzerinde çalıştığı için gerçek bir 'replace' senaryosu test edilmedi (veri kaybı riski nedeniyle bilinçli tercih).",
+  "rca_of_the_issue": "TestAlerts::test_send_by_onaylayan_and_audit failure RCA: Backend log göstermektedir ki 'https://integrations.emergentagent.com/api/v1/email/send' isteği 401 'API key is invalid' döndürüyor. server.py alerts_send bu hatayı yakalayıp muhtemelen kısa bir zaman aşımı/error yol ile Cloudflare ingress'ten 502 olarak dışarı çıkıyor. Fix: backend/.env içindeki EMERGENT_EMAIL_KEY'i yenilemek. Bu iterasyonda değiştirilen kod (Excel notes removal, _match_maps, dashboard, backup) ile ilişkisi yoktur."
+}

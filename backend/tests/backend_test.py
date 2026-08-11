@@ -784,3 +784,189 @@ class TestIbkbAndBankaBildirimi:
         requests.delete(f"{API}/payments/{self.__class__.pay_usd_id}",
                         headers=_h(tokens["banka"]))
 
+
+# ---------- Iteration 6: NOTLAR removal, export/check, dashboard extras, backup/restore ----------
+class TestIteration6NotesRemoval:
+    """BANKA BİLDİRİMİ sayfasında NOTLAR/taahhütname bloğu HİÇ olmamalı ve merged cell bulunmamalı."""
+
+    FORBIDDEN_SUBSTR = [
+        "NOTLAR", "notlar",
+        "taahhüt ederiz", "taahhut ederiz", "TAAHHÜT EDERIZ", "TAAHHUT EDERIZ",
+        "Döviz Dönüşüm Desteği", "Doviz Donusum Destegi",
+        "Döviz Dönüşüm Desteği Talebi",
+        "kaşe", "kase",
+        "imza", "İmza",
+    ]
+
+    def test_excel_first_sheet_has_no_notes_block(self, tokens):
+        r = requests.get(f"{API}/export/excel", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        import io as _io
+        from openpyxl import load_workbook
+        wb = load_workbook(_io.BytesIO(r.content))
+        assert wb.sheetnames[0] == "BANKA BİLDİRİMİ"
+        ws = wb["BANKA BİLDİRİMİ"]
+
+        # (1) No merged cells anywhere on the first sheet
+        merged = list(ws.merged_cells.ranges)
+        assert merged == [], f"BANKA BİLDİRİMİ should have no merged cells, got: {merged}"
+
+        # (2) No forbidden substrings in any cell value on the first sheet
+        offenders = []
+        for row in ws.iter_rows(values_only=True):
+            for val in row:
+                if val is None:
+                    continue
+                s = str(val)
+                for needle in self.FORBIDDEN_SUBSTR:
+                    if needle in s:
+                        offenders.append((needle, s))
+        assert not offenders, f"BANKA BİLDİRİMİ contains forbidden notes text: {offenders[:5]}"
+
+        # (3) The last non-empty row must be TOPLAM (i.e. nothing appended after totals)
+        last_data_row = None
+        for r_idx in range(ws.max_row, 0, -1):
+            row_vals = [ws.cell(row=r_idx, column=c).value for c in range(1, ws.max_column + 1)]
+            if any(v not in (None, "") for v in row_vals):
+                last_data_row = r_idx
+                break
+        assert last_data_row is not None
+        assert ws.cell(row=last_data_row, column=1).value == "TOPLAM", (
+            f"Last row of BANKA BİLDİRİMİ must be TOPLAM, got "
+            f"{[ws.cell(row=last_data_row, column=c).value for c in range(1, ws.max_column + 1)]}"
+        )
+
+    def test_excel_opens_cleanly_with_openpyxl(self, tokens):
+        """.xlsx must be valid — load_workbook must not raise."""
+        r = requests.get(f"{API}/export/excel", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        assert "spreadsheet" in r.headers.get("content-type", "").lower()
+        import io as _io
+        from openpyxl import load_workbook
+        wb = load_workbook(_io.BytesIO(r.content))
+        # required sheets still there
+        for name in ["BANKA BİLDİRİMİ", "Beyanname Listesi", "Eşleştirme Detayı"]:
+            assert name in wb.sheetnames, wb.sheetnames
+
+        # Beyanname Listesi has rows (>=1 data row expected in preview DB)
+        ws1 = wb["Beyanname Listesi"]
+        assert ws1.max_row >= 1
+        # Eşleştirme Detayı has header
+        ws2 = wb["Eşleştirme Detayı"]
+        headers2 = [c.value for c in ws2[1]]
+        assert "Beyanname No" in headers2 and "DTH IBAN" in headers2 and "ACH IBAN" in headers2
+
+
+class TestIteration6ExportCheck:
+    def test_export_check_ok(self, tokens):
+        r = requests.get(f"{API}/export/check", headers=_h(tokens["admin"]))
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("satir_sayisi", "eksik_sayisi", "eksikler"):
+            assert k in d, d
+        assert isinstance(d["satir_sayisi"], int)
+        assert isinstance(d["eksik_sayisi"], int)
+        assert isinstance(d["eksikler"], list)
+        # each missing row has beyanname_no / bedel / alanlar list
+        for e in d["eksikler"]:
+            assert "beyanname_no" in e and "alanlar" in e and isinstance(e["alanlar"], list)
+
+    def test_export_check_requires_auth(self):
+        r = requests.get(f"{API}/export/check")
+        assert r.status_code == 401
+
+
+class TestIteration6DashboardExtras:
+    def test_dashboard_has_new_cards(self, tokens):
+        r = requests.get(f"{API}/dashboard", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        d = r.json()
+        for k in ("bu_ay_kapatilan", "bu_ay_islem_sayi",
+                  "destek_bekleyen_sayi", "destek_bekleyen_tutar"):
+            assert k in d, f"missing dashboard key {k}: keys={list(d.keys())}"
+        assert isinstance(d["bu_ay_kapatilan"], dict)
+        assert isinstance(d["bu_ay_islem_sayi"], int)
+        assert isinstance(d["destek_bekleyen_sayi"], int)
+        assert isinstance(d["destek_bekleyen_tutar"], dict)
+        # legacy keys still present
+        for k in ("acik", "kismi", "kapali", "acik_tutar", "bedel_bakiye",
+                  "yaklasan", "gecmis", "son_hareketler"):
+            assert k in d
+
+
+class TestIteration6Backup:
+    """/api/backup indir + /api/backup/restore geri yükleme (admin-only)."""
+
+    backup_bytes = None
+
+    def test_backup_rbac_non_admin_forbidden(self, tokens):
+        for role in ("ihracat", "banka", "onaylayan", "viewer"):
+            r = requests.get(f"{API}/backup", headers=_h(tokens[role]))
+            assert r.status_code == 403, f"{role} got {r.status_code}"
+
+    def test_backup_download_json(self, tokens):
+        r = requests.get(f"{API}/backup", headers=_h(tokens["admin"]))
+        assert r.status_code == 200, r.text
+        assert "application/json" in r.headers.get("content-type", "").lower()
+        assert "attachment" in r.headers.get("content-disposition", "").lower()
+        import json as _json
+        data = _json.loads(r.content.decode("utf-8"))
+        assert "_meta" in data
+        for col in ("users", "declarations", "payments", "matches", "audit_logs"):
+            assert col in data, f"missing collection {col} in backup"
+            assert isinstance(data[col], list)
+        # meta info
+        assert data["_meta"].get("olusturan") == "admin@ihracat.com"
+        self.__class__.backup_bytes = r.content
+
+    def test_restore_rbac_non_admin_forbidden(self, tokens):
+        # Use a minimal fake backup for rbac (no real restore should occur since 403 first)
+        files = {"file": ("dummy.json", b'{"users": []}', "application/json")}
+        for role in ("ihracat", "banka", "onaylayan", "viewer"):
+            hdr = {"Authorization": f"Bearer {tokens[role]}"}
+            r = requests.post(f"{API}/backup/restore?mode=merge",
+                              headers=hdr, files=files)
+            assert r.status_code == 403, f"{role} got {r.status_code}"
+
+    def test_restore_invalid_file_400(self, tokens):
+        hdr = {"Authorization": f"Bearer {tokens['admin']}"}
+        files = {"file": ("bad.json", b"not-json-content", "application/json")}
+        r = requests.post(f"{API}/backup/restore?mode=merge", headers=hdr, files=files)
+        assert r.status_code == 400, r.text
+
+    def test_restore_non_backup_json_400(self, tokens):
+        hdr = {"Authorization": f"Bearer {tokens['admin']}"}
+        files = {"file": ("noop.json", b'{"foo": "bar"}', "application/json")}
+        r = requests.post(f"{API}/backup/restore?mode=merge", headers=hdr, files=files)
+        assert r.status_code == 400
+
+    def test_restore_merge_roundtrip(self, tokens):
+        """Download → merge-restore the same backup. Should be idempotent and 200."""
+        assert self.__class__.backup_bytes, "backup was not captured earlier"
+        # count declarations before
+        before = requests.get(f"{API}/declarations", headers=_h(tokens["admin"])).json()
+        n_before = len(before)
+
+        hdr = {"Authorization": f"Bearer {tokens['admin']}"}
+        files = {"file": ("backup.json", self.__class__.backup_bytes, "application/json")}
+        r = requests.post(f"{API}/backup/restore?mode=merge", headers=hdr, files=files)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body.get("ok") is True
+        assert body.get("mode") == "merge"
+        assert "yuklenen" in body
+        for col in ("users", "declarations", "payments", "matches", "audit_logs"):
+            assert col in body["yuklenen"]
+
+        # After merge with identical data, declaration count should not decrease
+        after = requests.get(f"{API}/declarations", headers=_h(tokens["admin"])).json()
+        assert len(after) >= n_before, (n_before, len(after))
+
+    def test_backup_audit_log(self, tokens):
+        r = requests.get(f"{API}/audit-logs", headers=_h(tokens["admin"]),
+                         params={"modul": "Yedek"})
+        assert r.status_code == 200
+        logs = r.json()
+        assert any(l.get("islem") == "INDIR" for l in logs), "backup INDIR audit log missing"
+        assert any(l.get("islem") == "GERI_YUKLE" for l in logs), "restore audit log missing"
+

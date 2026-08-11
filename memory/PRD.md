@@ -90,6 +90,15 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 - Excel/kontrol uçlarındaki N+1 sorgular `_match_maps()` ile tek seferde yüklemeye çevrildi.
 - deployment_agent sonucu: **pass**, blocker yok.
 
+## Güncelleme (2026-06, 7. tur)
+- **Excel NOTLAR / taahhütname bloğu tamamen kaldırıldı** (kullanıcı isteği: dosyayı bozuyordu,
+  metni kendisi elle ekleyecek). `_append_notes`, `NOTES_TITLE`, `NOTES_ITEMS` ve
+  `get_column_letter` importu silindi. BANKA BİLDİRİMİ sayfası artık merge hücre içermiyor,
+  son satır TOPLAM. Diğer sayfalar (Beyanname Listesi, Eşleştirme Detayı) korundu.
+- Test: pytest 66/67 (iteration_6.json). Tek fail e-posta ile ilgili → EMERGENT_EMAIL_KEY
+  fork sonrası platform tarafında geçersiz (401). Kod hatası değil, anahtar yeniden
+  sağlanması gerekiyor; 2FA kodu ve haftalık uyarı e-postası bu nedenle gönderilemiyor.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)
