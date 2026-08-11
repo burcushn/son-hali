@@ -970,3 +970,185 @@ class TestIteration6Backup:
         assert any(l.get("islem") == "INDIR" for l in logs), "backup INDIR audit log missing"
         assert any(l.get("islem") == "GERI_YUKLE" for l in logs), "restore audit log missing"
 
+
+
+# ---------- Iteration 7: 'Eşleştirme Detayı' 19 kolon + yeni 3 kolon (TCMB/Teşvik/Taahhüt) ----------
+class TestIteration7EslestirmeDetayiColumns:
+    """Excel 'Eşleştirme Detayı' sayfası tam 19 kolon içermeli ve yeni 3 kolon
+    (TCMB Devir Oranı, Teşvik, Taahhüt) ACH IBAN'dan sonra ve 'Kur' kolonundan önce yer almalı.
+    tcmb_devir_orani=95 gibi özel bir değer Excel'e '%95' olarak yansımalı."""
+
+    dec_id = None
+    dec_no = f"TEST_ITER7_{int(datetime.now().timestamp())}"
+    pay_id = None
+    match_id = None
+    acilis = "2026-05-01"
+
+    def test_seed(self, tokens):
+        r = requests.post(f"{API}/declarations", headers=_h(tokens["ihracat"]),
+                          json={**_base_dec(self.__class__.dec_no, self.acilis,
+                                            doviz="EUR", tutar=5000.0,
+                                            ithalatci="TEST ITER7 GmbH",
+                                            gumruk="GM-ITER7"),
+                                "tesvik": True, "taahhut": False})
+        assert r.status_code == 200, r.text
+        self.__class__.dec_id = r.json()["id"]
+
+        r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+            "banka": "TEST ITER7 BANK", "gonderen": "TEST_ITER7_SENDER",
+            "tarih": self.acilis, "doviz": "EUR", "tutar": 2000.0,
+            "dth_iban": "TR77 ITER7 DTH 0000 0000 0000 01",
+            "ach_iban": "TR77 ITER7 ACH 0000 0000 0000 02",
+        })
+        assert r.status_code == 200, r.text
+        self.__class__.pay_id = r.json()["id"]
+
+        # IBKB güncellemesinde tcmb_devir_orani=95 (özellikle default 100 dışında)
+        r = requests.put(f"{API}/payments/{self.__class__.pay_id}/ibkb",
+                         headers=_h(tokens["banka"]),
+                         json={"ibkb_duzenlendi": True,
+                               "ibkb_no": "IBKB-ITER7",
+                               "ibkb_tarihi": "2026-05-02",
+                               "dosya_referansi": "DOSYA-ITER7",
+                               "tcmb_devir_orani": 95})
+        assert r.status_code == 200, r.text
+        assert r.json()["tcmb_devir_orani"] == 95
+
+        r = requests.post(f"{API}/matches", headers=_h(tokens["onaylayan"]), json={
+            "declaration_id": self.__class__.dec_id,
+            "payment_id": self.__class__.pay_id,
+            "kapatilan_tutar": 1500.0})
+        assert r.status_code == 200, r.text
+        self.__class__.match_id = r.json()["id"]
+
+    def test_eslestirme_detayi_has_19_columns_in_correct_order(self, tokens):
+        r = requests.get(f"{API}/export/excel", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        import io as _io
+        from openpyxl import load_workbook
+        wb = load_workbook(_io.BytesIO(r.content))
+        assert wb.sheetnames == ["BANKA BİLDİRİMİ", "Beyanname Listesi", "Eşleştirme Detayı"], wb.sheetnames
+
+        ws2 = wb["Eşleştirme Detayı"]
+        headers = [c.value for c in ws2[1]]
+        expected = [
+            "Beyanname No", "Bedel Gönderen", "Banka", "IBKB No", "Dosya Referansı",
+            "Bedel Tarihi", "Bedel Dövizi", "Kullanılan Bedel", "DTH IBAN", "ACH IBAN",
+            "TCMB Devir Oranı", "Teşvik", "Taahhüt", "Kur", "Kur Kaynağı",
+            "Kapatılan (Beyanname Dövizi)", "Beyanname Dövizi", "İşlem Tarihi", "İşlemi Yapan",
+        ]
+        assert headers == expected, headers
+        assert len(headers) == 19
+
+        # Yeni 3 kolon ACH IBAN (idx 9) sonrası ve 'Kur' (idx 13) öncesi konumda
+        assert headers.index("TCMB Devir Oranı") == 10
+        assert headers.index("Teşvik") == 11
+        assert headers.index("Taahhüt") == 12
+        assert headers.index("ACH IBAN") == 9
+        assert headers.index("Kur") == 13
+
+    def test_eslestirme_detayi_new_cols_populated_with_custom_tcmb(self, tokens):
+        r = requests.get(f"{API}/export/excel", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        import io as _io
+        from openpyxl import load_workbook
+        wb = load_workbook(_io.BytesIO(r.content))
+        ws2 = wb["Eşleştirme Detayı"]
+
+        our = None
+        for row in ws2.iter_rows(min_row=2, values_only=True):
+            if row[0] == self.__class__.dec_no:
+                our = row
+                break
+        assert our is not None, "yeni eşleştirme satırı Eşleştirme Detayı'nda bulunamadı"
+
+        # index 10 = TCMB Devir Oranı; girilen 95 değeri '%95' olarak yansımalı
+        assert our[10] == "%95", our[10]
+        # index 11 = Teşvik (E), index 12 = Taahhüt (H)
+        assert our[11] == "E", our
+        assert our[12] == "H", our
+        # Kur kolonu (13) sayısal, boş değil
+        assert isinstance(our[13], (int, float)) and our[13] > 0, our
+
+        # Hiçbir yeni 3 kolonun hücresi diğer veri satırlarında boş olmamalı
+        idx_tcmb, idx_tes, idx_taah = 10, 11, 12
+        for row in ws2.iter_rows(min_row=2, values_only=True):
+            if row[0] is None:  # boş satır
+                continue
+            assert row[idx_tcmb] not in (None, ""), row
+            assert row[idx_tes] in ("E", "H"), row
+            assert row[idx_taah] in ("E", "H"), row
+
+    def test_banka_bildirimi_custom_tcmb_reflected(self, tokens):
+        """İlk sayfada da girilen tcmb_devir_orani=95 satıra '%95' olarak yansımalı."""
+        r = requests.get(f"{API}/export/excel", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        import io as _io
+        from openpyxl import load_workbook
+        wb = load_workbook(_io.BytesIO(r.content))
+        ws = wb["BANKA BİLDİRİMİ"]
+        # ilk sayfada beyanname no col 4 (index 3)
+        found = None
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if row[0] == "TOPLAM":
+                continue
+            if row[3] == self.__class__.dec_no:
+                found = row
+                break
+        assert found is not None, "iter7 kaydı BANKA BİLDİRİMİ sayfasında bulunamadı"
+        # index 8 = TCMB DEVİR ORANI, index 9 = TEŞVİK, index 10 = TAAHHÜT
+        assert found[8] == "%95", found[8]
+        assert found[9] == "E", found[9]
+        assert found[10] == "H", found[10]
+
+    def test_beyanname_listesi_still_17_cols(self, tokens):
+        r = requests.get(f"{API}/export/excel", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        import io as _io
+        from openpyxl import load_workbook
+        wb = load_workbook(_io.BytesIO(r.content))
+        ws1 = wb["Beyanname Listesi"]
+        headers = [c.value for c in ws1[1]]
+        assert len(headers) == 17, headers
+        assert "Teşvik" in headers and "Taahhüt" in headers
+        # Beyanname Listesi'nde Teşvik/Taahhüt EVET/HAYIR formatında
+        for row in ws1.iter_rows(min_row=2, values_only=True):
+            if row[0] == self.__class__.dec_no:
+                # last two columns are Teşvik, Taahhüt
+                assert row[15] == "EVET", row
+                assert row[16] == "HAYIR", row
+                break
+
+    def test_regression_dashboard_and_reports(self, tokens):
+        r = requests.get(f"{API}/dashboard", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        d = r.json()
+        assert "bu_ay_kapatilan" in d
+        assert "destek_bekleyen_tutar" in d or "destek_bekleyen_sayi" in d
+
+        r = requests.get(f"{API}/reports/summary", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+
+        r = requests.get(f"{API}/export/check", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+
+    def test_regression_backup_and_restore_merge(self, tokens):
+        hdr = {"Authorization": f"Bearer {tokens['admin']}"}
+        r = requests.get(f"{API}/backup", headers=hdr)
+        assert r.status_code == 200
+        data = r.content
+        assert data and len(data) > 100
+        files = {"file": ("bkp.json", data, "application/json")}
+        r = requests.post(f"{API}/backup/restore?mode=merge", headers=hdr, files=files)
+        assert r.status_code == 200, r.text
+
+    def test_cleanup(self, tokens):
+        if self.__class__.match_id:
+            requests.delete(f"{API}/matches/{self.__class__.match_id}",
+                            headers=_h(tokens["onaylayan"]))
+        if self.__class__.dec_id:
+            requests.delete(f"{API}/declarations/{self.__class__.dec_id}",
+                            headers=_h(tokens["ihracat"]))
+        if self.__class__.pay_id:
+            requests.delete(f"{API}/payments/{self.__class__.pay_id}",
+                            headers=_h(tokens["banka"]))

@@ -99,6 +99,12 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
   fork sonrası platform tarafında geçersiz (401). Kod hatası değil, anahtar yeniden
   sağlanması gerekiyor; 2FA kodu ve haftalık uyarı e-postası bu nedenle gönderilemiyor.
 
+## Güncelleme (2026-06, 8. tur)
+- **Eşleştirme Detayı sayfasına 3 kolon eklendi:** TCMB Devir Oranı, Teşvik, Taahhüt
+  (ACH IBAN ile Kur arasında; sayfa artık 19 kolon). İlk sayfa (BANKA BİLDİRİMİ) bu 3 kolonu
+  zaten içeriyordu ve dolu geliyor (kullanıcı yeniden indirip doğruladı).
+- Test: iteration_7.json — 74/75 PASS. Tek fail pre-existing EMERGENT_EMAIL_KEY 401 (e-posta).
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)

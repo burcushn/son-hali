@@ -819,7 +819,8 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
 
     ws2 = wb.create_sheet("Eşleştirme Detayı")
     h2 = ["Beyanname No", "Bedel Gönderen", "Banka", "IBKB No", "Dosya Referansı", "Bedel Tarihi",
-          "Bedel Dövizi", "Kullanılan Bedel", "DTH IBAN", "ACH IBAN", "Kur", "Kur Kaynağı",
+          "Bedel Dövizi", "Kullanılan Bedel", "DTH IBAN", "ACH IBAN", "TCMB Devir Oranı",
+          "Teşvik", "Taahhüt", "Kur", "Kur Kaynağı",
           "Kapatılan (Beyanname Dövizi)", "Beyanname Dövizi", "İşlem Tarihi", "İşlemi Yapan"]
     ws2.append(h2)
     for m in matches:
@@ -831,6 +832,9 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
                     p.get("dosya_referansi", ""), p["tarih"], p["doviz"],
                     m["bedel_kullanilan"], p.get("dth_iban", ""),
                     p.get("ach_iban") or os.environ.get("DEFAULT_ACH_IBAN", ""),
+                    f"%{p.get('tcmb_devir_orani', 100):g}",
+                    "E" if d.get("tesvik") else "H",
+                    "E" if d.get("taahhut") else "H",
                     m["kur"], m.get("kur_kaynak", ""), m["kapatilan_tutar"],
                     d["doviz"], m["tarih"][:19].replace("T", " "), m.get("kullanici_ad", "")])
     _style(ws2, len(h2))

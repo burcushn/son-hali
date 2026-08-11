@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 7: 'Eşleştirme Detayı' sayfasına 3 yeni kolon (TCMB Devir Oranı, Teşvik, Taahhüt) eklendi. backend_test.py'a yeni TestIteration7EslestirmeDetayiColumns sınıfı (8 test) eklendi: (1) seed — beyanname (tesvik=True, taahhut=False) + payment + IBKB güncelleme tcmb_devir_orani=95 + match; (2) Eşleştirme Detayı başlık sırası TAM 19 kolon ve beklenen sırayla ['Beyanname No','Bedel Gönderen','Banka','IBKB No','Dosya Referansı','Bedel Tarihi','Bedel Dövizi','Kullanılan Bedel','DTH IBAN','ACH IBAN','TCMB Devir Oranı','Teşvik','Taahhüt','Kur','Kur Kaynağı','Kapatılan (Beyanname Dövizi)','Beyanname Dövizi','İşlem Tarihi','İşlemi Yapan'] — yeni 3 kolon idx 10/11/12'de, ACH IBAN (9) ile Kur (13) arasında; (3) yeni satırda TCMB='%95', Teşvik='E', Taahhüt='H', Kur>0 ve tüm veri satırlarında bu 3 kolon boş değil; (4) BANKA BİLDİRİMİ ilk sayfasında da aynı satırda TCMB='%95', TEŞVİK='E', TAAHHÜT='H' — özel tcmb değeri Excel'e doğru yansıyor; (5) Beyanname Listesi hâlâ 17 kolon; aynı beyanname Teşvik='EVET', Taahhüt='HAYIR'; (6) regresyon /api/dashboard (bu_ay_kapatilan/destek_bekleyen alanları), /api/reports/summary, /api/export/check 200; (7) regresyon /api/backup indir + /api/backup/restore?mode=merge 200; (8) cleanup. Toplam suite 74/75 PASS.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/alerts/send", "issue": "Iteration-6'dan beri pre-existing: EMERGENT_EMAIL_KEY 401 'API key is invalid' — /api/alerts/send Cloudflare üzerinden 502 dönüyor. Iteration-7 kodu ile ilgisiz; env credential sorunu (main agent notunda 'ignore' talimatı var)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(pre-existing) EMERGENT_EMAIL_KEY rotate — iteration-7 kapsamı dışında, tek başarısız test onun sonucu."
+  ],
+  "critical_code_review_comments": [
+    "server.py export_excel: 'Eşleştirme Detayı' satır append'inde f\"%{p.get('tcmb_devir_orani', 100):g}\" formatı, BANKA BİLDİRİMİ ile aynı — tutarlı. Ancak veri satırında `tcmb_devir_orani` alanı `None` gelirse `.get(..., 100)` default'u devreye girmez (`None` döner) ve format hatası olabilir; models.py float default=100.0 sayesinde şu an güvenli fakat legacy dokümanlar için savunmacı `p.get('tcmb_devir_orani') or 100` daha güvenlidir.",
+    "'Teşvik'/'Taahhüt' Eşleştirme Detayı'nda 'E'/'H' iken Beyanname Listesi'nde 'EVET'/'HAYIR' — iki farklı format aynı Excel içinde kullanıcı için kafa karıştırıcı olabilir; iç tutarlılık için tek format tercih edilebilir (banka şablonu E/H istediği için ilk sayfa öyle kalmalı, ancak Eşleştirme Detayı destek sayfası — EVET/HAYIR ile hizalanabilir).",
+    "server.py ws2 satır append'i m['tarih'][:19].replace('T',' ') slicing yapıyor; m['tarih'] farklı bir formatta (ör. Z suffix, timezone) gelirse subtle bozulmalar olabilir — utcnow_iso() yerel garantiyi verse de string index tabanlı manipülasyon yerine datetime.fromisoformat + strftime tercih edilebilir."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "98.7% (74/75 pass; 8/8 new iteration-7 tests pass)", "frontend": "N/A (backend-only iteration)"},
+  "seed_data_creation": "Iteration-7 sınıfı kendi beyanname/payment/match kayıtlarını (TEST_ITER7_*) üretir ve test_cleanup ile siler; kalıcı yan etki yok.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@ihracat.com/Admin1234! yeterli; regresyon için demo hesaplar (ihracat/banka/onaylayan/viewer @ihracat.com, Test1234!) kullanıldı.",
+  "context_for_next_testing_agent": "Iteration-7 testleri backend_test.py sonuna TestIteration7EslestirmeDetayiColumns adıyla eklendi. Excel 3 sayfalı yapı sabit: ['BANKA BİLDİRİMİ' (11 kol), 'Beyanname Listesi' (17 kol), 'Eşleştirme Detayı' (19 kol)]. Yeni 3 kolonun sırası kritik (idx 10-12). tcmb_devir_orani UI'dan gelen özel değerler (100 dışında) Excel'e '%N' formatında doğru yansıyor (test edildi: 95).",
+  "rca_of_the_issue": "Iteration-7'de ihtiyaç olan tek eksik: 'Eşleştirme Detayı' sayfasında TCMB/Teşvik/Taahhüt kolonları yoktu. server.py ws2 h2 listesi ve ws2.append() satırında 3 kolon eklendi. Testler openpyxl ile satır-satır doğrulama yaparak eklemeyi kanıtlıyor. Tek fail (TestAlerts) pre-existing env sorunu, iterasyon değişikliği ile ilgisiz."
+}
