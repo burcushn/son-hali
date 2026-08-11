@@ -83,6 +83,13 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
   Dashboard yanıtına `bu_ay_kapatilan, bu_ay_islem_sayi, destek_bekleyen_sayi, destek_bekleyen_tutar` eklendi.
 - Test: backup indir/geri yükle curl ile doğrulandı, dashboard ve kullanıcı ekranı screenshot ile doğrulandı.
 
+## Yayına alma hazırlığı (2026-06)
+- `.gitignore`'dan `.env` engelleri kaldırıldı (deploy için .env dosyaları repoda olmalı).
+- `.dockerignore` eklendi: memory/, test_reports/, tests/, yedekler/ hariç tutuldu.
+- `SEED_DEMO_USERS="false"` → canlıda sadece admin hesabı oluşur.
+- Excel/kontrol uçlarındaki N+1 sorgular `_match_maps()` ile tek seferde yüklemeye çevrildi.
+- deployment_agent sonucu: **pass**, blocker yok.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)

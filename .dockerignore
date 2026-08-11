@@ -1,0 +1,11 @@
+memory/test_credentials.md
+memory/
+test_reports/
+tests/
+yedekler/
+.git/
+.emergent/
+**/node_modules
+**/__pycache__
+*.pyc
+.ruff_cache/

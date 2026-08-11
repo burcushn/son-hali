@@ -782,14 +782,22 @@ def _append_notes(ws, start_row: int, ncols: int):
     return r
 
 
+async def _match_maps():
+    """Eşleştirmeler için beyanname/bedel sözlükleri (N+1 sorgu yerine tek seferde yükleme)."""
+    decs = {str(d["_id"]): d for d in await db.declarations.find({}).to_list(20000)}
+    pays = {str(p["_id"]): p for p in await db.payments.find({}).to_list(20000)}
+    return decs, pays
+
+
 @api.get("/export/check")
 async def export_check(durum: str = "", user: dict = Depends(get_current_user)):
     """Excel alınmadan önce banka bildiriminde boş kalacak alanları listeler."""
     matches = await db.matches.find({}).to_list(5000)
+    dec_map, pay_map = await _match_maps()
     eksikler = []
     for m in matches:
-        d = await db.declarations.find_one({"_id": ObjectId(m["declaration_id"])})
-        p = await db.payments.find_one({"_id": ObjectId(m["payment_id"])})
+        d = dec_map.get(str(m["declaration_id"]))
+        p = pay_map.get(str(m["payment_id"]))
         if not d or not p:
             continue
         if durum and d.get("durum") != durum:
@@ -823,10 +831,11 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
     ws.append(headers)
 
     matches = await db.matches.find({}).sort("tarih", 1).to_list(5000)
+    dec_map, pay_map = await _match_maps()
     sira, toplam = 0, 0.0
     for m in matches:
-        d = await db.declarations.find_one({"_id": ObjectId(m["declaration_id"])})
-        p = await db.payments.find_one({"_id": ObjectId(m["payment_id"])})
+        d = dec_map.get(str(m["declaration_id"]))
+        p = pay_map.get(str(m["payment_id"]))
         if not d or not p:
             continue
         if durum and d.get("durum") != durum:
@@ -884,8 +893,8 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
           "Kapatılan (Beyanname Dövizi)", "Beyanname Dövizi", "İşlem Tarihi", "İşlemi Yapan"]
     ws2.append(h2)
     for m in matches:
-        d = await db.declarations.find_one({"_id": ObjectId(m["declaration_id"])})
-        p = await db.payments.find_one({"_id": ObjectId(m["payment_id"])})
+        d = dec_map.get(str(m["declaration_id"]))
+        p = pay_map.get(str(m["payment_id"]))
         if not d or not p:
             continue
         ws2.append([d["beyanname_no"], p["gonderen"], p["banka"], p.get("ibkb_no", ""),
