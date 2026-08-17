@@ -49,7 +49,7 @@ class User(BaseDocument):
     name: str
     role: str
     active: bool = True
-    two_factor: bool = True
+    two_factor: bool = False
     created_at: str = Field(default_factory=utcnow_iso)
 
 
@@ -58,7 +58,7 @@ class UserCreate(BaseModel):
     name: str
     role: str
     password: str
-    two_factor: bool = True
+    two_factor: bool = False
 
 
 class UserUpdate(BaseModel):

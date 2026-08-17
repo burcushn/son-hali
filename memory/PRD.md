@@ -129,6 +129,15 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
   bağlandı. Kullanıcı için `masaustu-kisayol.bat` (Chrome/Edge `--app=` modunda logolu masaüstü
   kısayolu oluşturur) ve `MASAUSTU-KISAYOL.md` kılavuzu eklendi.
 
+## Bug (2026-06, 10. tur) — yeni kullanıcı giriş yapamıyor
+- Kök neden: `UserCreate.two_factor` varsayılan **True** + `EMERGENT_EMAIL_KEY` platformda geçersiz
+  (401) → doğrulama kodu e-postası gitmiyor, kullanıcı hiç token alamıyor ("şifre kabul etmiyor").
+- Düzeltme: (a) yeni kullanıcıda 2FA varsayılan **kapalı** (models.py User/UserCreate + Users.js formu
+  ve uyarı metinleri), (b) `TWO_FACTOR_FALLBACK` (env, default true): 2FA açık olsa da e-posta
+  gönderilemezse challenge `used` işaretlenip oturum açılır ve `Giriş / 2FA_ATLANDI` audit log'u
+  yazılır, (c) `create_user` şifre min 6 karakter kontrolü.
+- Test: iteration_9.json — backend 100/100 pytest, frontend akışı doğrulandı.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)

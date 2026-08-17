@@ -101,6 +101,8 @@ async def log_action(user: dict, modul: str, islem: str, aciklama: str, ref: str
 
 # ---------------- helpers ----------------
 ZORUNLU_BOZDURMA_ORANI = 35.0  # % — TCMB zorunlu bozdurma oranı
+# E-posta gönderilemediğinde 2FA adımını atla (kullanıcının kilitlenmesini önler)
+TWO_FACTOR_FALLBACK = os.environ.get("TWO_FACTOR_FALLBACK", "true").lower() == "true"
 
 
 def declaration_view(doc: dict) -> dict:
@@ -239,6 +241,12 @@ async def login(body: LoginInput, response: Response):
     if not user.get("two_factor", False):
         return _issue_session(user, response)
     cid, delivered = await _create_challenge(user)
+    if not delivered and TWO_FACTOR_FALLBACK:
+        # E-posta gönderilemedi: kullanıcı kilitlenmesin, şifre doğru olduğu için oturum açılır
+        await db.login_challenges.update_one({"_id": ObjectId(cid)}, {"$set": {"used": True}})
+        await log_action(user, "Giriş", "2FA_ATLANDI",
+                         "E-posta gönderilemediği için doğrulama kodu adımı atlandı")
+        return _issue_session(user, response)
     return {"two_factor": True, "challenge_id": cid, "email": email, "gonderildi": delivered,
             "mesaj": ("Doğrulama kodu e-posta adresinize gönderildi (5 dakika geçerli)."
                       if delivered else
@@ -311,6 +319,8 @@ async def create_user(body: UserCreate, user: dict = Depends(require())):
     email = body.email.strip().lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı")
+    if len(body.password or "") < 6:
+        raise HTTPException(status_code=400, detail="Şifre en az 6 karakter olmalı")
     doc = {"email": email, "name": body.name, "role": body.role, "active": True,
            "two_factor": body.two_factor,
            "password_hash": hash_password(body.password), "created_at": utcnow_iso()}

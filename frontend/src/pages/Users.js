@@ -64,7 +64,7 @@ export default function Users() {
     <div data-testid="users-page">
       <PageHeader title="Kullanıcı Yönetimi" desc="Roller ve yetkiler — her personel yalnızca kendi işlemini yapabilir">
         <Button className="rounded-sm" data-testid="add-user-button"
-                onClick={() => setForm({ email: "", name: "", role: "ihracat", password: "", active: true, two_factor: true })}>
+                onClick={() => setForm({ email: "", name: "", role: "ihracat", password: "", active: true, two_factor: false })}>
           <Plus className="h-4 w-4 mr-1.5" /> Yeni Kullanıcı
         </Button>
       </PageHeader>
@@ -175,17 +175,31 @@ export default function Users() {
                          onChange={(e) => setForm({ ...form, active: e.target.checked })} />
                   Aktif
                 </label>
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex items-start gap-2 text-sm">
                   <input type="checkbox" checked={!!form.two_factor} data-testid="user-2fa-checkbox"
+                         className="mt-1"
                          onChange={(e) => setForm({ ...form, two_factor: e.target.checked })} />
-                  Girişte e-posta doğrulama kodu istensin (2 adımlı doğrulama)
+                  <span>
+                    Girişte e-posta doğrulama kodu istensin (2 adımlı doğrulama)
+                    <span className="block text-xs text-muted-foreground">
+                      Kapalı önerilir: e-posta servisi çalışmıyorsa kod gelmez ve kullanıcı
+                      giriş yapamaz. Şifre yine de zorunludur.
+                    </span>
+                  </span>
                 </label>
                 </>
               ) : (
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex items-start gap-2 text-sm">
                   <input type="checkbox" checked={!!form.two_factor} data-testid="user-2fa-checkbox"
+                         className="mt-1"
                          onChange={(e) => setForm({ ...form, two_factor: e.target.checked })} />
-                  Girişte e-posta doğrulama kodu istensin (e-posta adresi gerçek olmalı)
+                  <span>
+                    Girişte e-posta doğrulama kodu istensin
+                    <span className="block text-xs text-muted-foreground">
+                      Kapalı önerilir. Açarsanız e-posta adresi gerçek olmalı; e-posta
+                      gönderilemezse kullanıcı sadece şifresiyle girer.
+                    </span>
+                  </span>
                 </label>
               )}
             </div>
