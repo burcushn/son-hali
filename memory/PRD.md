@@ -124,6 +124,11 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 - Giriş ekranında kurumsal logo; proje sahibi ismi kullanıcı isteğiyle **şimdilik kaldırıldı**
   (istenirse el yazısı fontla sağ koyu alana geri eklenebilir). Demo hesap listesi kaldırıldı.
 
+- **Masaüstü kısayolu / PWA (2026-06):** `frontend/public/manifest.json` (standalone, logo ikonları),
+  `favicon.ico` + `assets/logo-192/512.png` logodan üretildi, `index.html` başlık/tema/manifest
+  bağlandı. Kullanıcı için `masaustu-kisayol.bat` (Chrome/Edge `--app=` modunda logolu masaüstü
+  kısayolu oluşturur) ve `MASAUSTU-KISAYOL.md` kılavuzu eklendi.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)
