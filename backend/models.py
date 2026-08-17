@@ -72,6 +72,7 @@ class UserUpdate(BaseModel):
 class LoginInput(BaseModel):
     email: str
     password: str
+    remember: bool = False
 
 
 class VerifyCodeInput(BaseModel):

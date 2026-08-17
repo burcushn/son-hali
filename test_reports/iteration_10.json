@@ -1,0 +1,20 @@
+{
+  "summary": "Iteration 10: 'Beni hatırla' + Emergent/SMTP e-posta yönlendirmesi testleri. Backend: 110/110 pytest geçti (yeni TestIteration10RememberMe = 4 test, TestIteration10SmtpRouting = 4 test, TestIteration10AlertsSend = 2 test eklendi; toplam +10). remember=true → JWT exp ~30 gün ve Set-Cookie access_token max-age ≈2.592.000s doğrulandı; remember=false / gönderilmemişse ~12h doğrulandı; 2FA + remember: 30 günlük oturum challenge içinden verify-code sonrası da korunuyor (fallback ve challenge path'lerinin her ikisi de kapsandı). alerts.smtp_configured() SMTP_HOST+SMTP_FROM yokken False, ayarlıyken True. _send() monkeypatch ile: SMTP env varken _send_smtp'yi çağırıyor ve httpx'e gitmiyor; yokken Emergent /api/v1/email/send endpoint'ini X-Email-Key ile çağırıyor. /api/alerts/send bir kez çağrıldı → 200 + sent=true + provider='emergent', Uyarı/EPOSTA audit log kaydı düştü. Frontend: Login sayfasında login-remember-checkbox görünüyor; işaretleyip admin@ihracat.com ile giriş → localStorage.remember_email='admin@ihracat.com', çıkıştan sonra e-posta alanı önceden dolu ve kutu işaretli. Kutuyu kaldırıp giriş → localStorage temizleniyor, çıkışta e-posta boş, kutu işaretsiz.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py hâlâ 1000+ satır; auth/2FA/matches/backup gibi modüllere bölünmesi bakım kolaylığı için önerilir.",
+    "AuthContext.login(): remember=false verildiğinde remember_email localStorage'dan siliniyor, doğru davranış — ancak tarayıcıyı kapatıp açma sonrası JWT httpOnly cookie'de 30 gün açık kalırken localStorage token 'token' anahtarı da 30 gün açık kalıyor. Güvenlik için ilerleyen sürümde cookie-only auth'a geçmek düşünülmeli (Bearer + cookie ikiliği hafif redundant).",
+    "alerts._send() SMTP_HOST/SMTP_FROM yalnızca process env'den okunuyor; unit testte importlib.reload gereksinimi doğuruyor. Kararı bir fonksiyon içinde os.environ.get ile yaptığı için sorun olmuyor ama startup dışında env değişikliği canlıda yansımaz — bu beklenen; belgelenebilir."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (110/110)", "frontend": "100% (Login remember + logout prefill + uncheck-clear akışları)"},
+  "seed_data_creation": "TestIteration10RememberMe test_2fa_user için geçici test_rem2fa_<ts>@ihracat.com kullanıcısı oluşturdu ve sonunda sildi. TestIteration10AlertsSend gerçek e-posta gönderdi (ALERT_EMAILS alıcılarına, 1 kez).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin@ihracat.com / Admin1234!",
+  "context_for_next_testing_agent": "Yeni test sınıfları: TestIteration10RememberMe (JWT exp + cookie max-age + 2FA verify-code remember taşıma), TestIteration10SmtpRouting (alerts modülünü importlib.reload ile yükleyip monkeypatch ile _send yönlendirmesini birim test ediyor; gerçek SMTP sunucusuna bağlanmıyor), TestIteration10AlertsSend (tek gerçek /api/alerts/send çağrısı — testi tekrar tekrar çalıştırmayın, aksi halde alıcılara e-posta yağar). test2fa@ihracat.com iş DB'sinde iki_faktor=True kalmalı (TestTwoFactorFallback bağımlı). Regresyon suite'i (iteration 1-9) hala geçiyor.",
+  "rca_of_the_issue": "N/A — bu turda bug bulunmadı. remember-me implementasyonu backend ve frontend tarafta beklenildiği gibi çalışıyor; SMTP yönlendirici doğru koşulla dallanıyor; Emergent path'i httpx ile /api/v1/email/send'e X-Email-Key ile POST yapıyor."
+}

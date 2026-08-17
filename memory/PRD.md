@@ -138,6 +138,26 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
   yazılır, (c) `create_user` şifre min 6 karakter kontrolü.
 - Test: iteration_9.json — backend 100/100 pytest, frontend akışı doğrulandı.
 
+## E-posta (2026-06, 11. tur)
+- Emergent e-posta anahtarı yeniden geçerli → haftalık uyarı ve 2FA kodu **gerçekten gönderiliyor**
+  (`/api/alerts/send` → sent:true, provider:emergent).
+- **Kurumsal SMTP desteği eklendi** (`aiosmtplib`): `alerts.py` içinde `_send()` yönlendirici;
+  `SMTP_HOST` + `SMTP_FROM` tanımlıysa SMTP, değilse Emergent servisi kullanılır.
+  Env: SMTP_HOST/PORT/USER/PASSWORD/FROM/SSL/TIMEOUT_SECONDS. Kılavuz: `EPOSTA-AYARLARI.md`.
+- `TWO_FACTOR_FALLBACK=false` ile 2FA atlama güvenlik ağı kapatılabilir.
+
+## E-posta (2026-06, 11-12. tur)
+- Emergent yönetilen Resend entegrasyonu kullanılıyor: `RESEND_API_KEY` / `EMAIL_FROM_ADDR`
+  GEREKMİYOR (gönderen adresi platform tarafından yönetiliyor, yalnızca `EMERGENT_EMAIL_KEY`
+  + `EMAIL_FROM_NAME`; opsiyonel `EMAIL_REPLY_TO` → payload `contact_email`).
+- Playbook uyumu: `alerts._assert_safe_email` güvenlik kapısı (form/input yasağı, kimlik bilgisi
+  isteme taraması, https link hijyeni, anchor-host uyumu) her gönderim yolunda çağrılıyor.
+- Kurumsal SMTP alternatifi (`aiosmtplib`): `SMTP_HOST`+`SMTP_FROM` tanımlıysa SMTP kullanılır.
+- **Beni hatırla**: `remember=true` → 30 günlük JWT + cookie, aksi halde 12 saat; 2FA akışında
+  challenge içinde taşınır. Frontend: `login-remember-checkbox` + `localStorage.remember_email`.
+- Test: iteration_10 (110/110), iteration_11 (yeni 17/17; kalan failler harici Emergent 429
+  rate-limit kaynaklı, izole koşuda geçti).
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)

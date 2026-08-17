@@ -54,10 +54,10 @@ def verify_password(p: str, h: str) -> bool:
         return False
 
 
-def create_access_token(uid: str, email: str) -> str:
+def create_access_token(uid: str, email: str, hours: int = 12) -> str:
     return jwt.encode(
         {"sub": uid, "email": email, "type": "access",
-         "exp": datetime.now(timezone.utc) + timedelta(hours=12)},
+         "exp": datetime.now(timezone.utc) + timedelta(hours=hours)},
         os.environ["JWT_SECRET"], algorithm=JWT_ALG)
 
 
@@ -195,23 +195,24 @@ async def recalc_payment(pid: str):
 
 
 # ---------------- auth ----------------
-def _issue_session(user: dict, response: Response) -> dict:
-    token = create_access_token(str(user["_id"]), user["email"])
+def _issue_session(user: dict, response: Response, remember: bool = False) -> dict:
+    hours = 24 * 30 if remember else 12
+    token = create_access_token(str(user["_id"]), user["email"], hours)
     response.set_cookie("access_token", token, httponly=True, secure=True,
-                        samesite="none", max_age=43200, path="/")
+                        samesite="none", max_age=hours * 3600, path="/")
     u = dict(user)
     u["_id"] = str(u["_id"])
     u.pop("password_hash", None)
-    return {**User.from_mongo(u).model_dump(), "token": token}
+    return {**User.from_mongo(u).model_dump(), "token": token, "remember": remember}
 
 
-async def _create_challenge(user: dict) -> tuple:
+async def _create_challenge(user: dict, remember: bool = False) -> tuple:
     code = f"{secrets.randbelow(1000000):06d}"
     res = await db.login_challenges.insert_one({
         "user_id": str(user["_id"]), "email": user["email"],
         "code_hash": hash_password(code), "attempts": 0,
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5),
-        "used": False, "created_at": utcnow_iso(),
+        "used": False, "created_at": utcnow_iso(), "remember": remember,
     })
     logger.info(f"[2FA] {user['email']} doğrulama kodu: {code}")
     delivered = await alerts.send_code(user["email"], user.get("name", ""), code)
@@ -239,14 +240,14 @@ async def login(body: LoginInput, response: Response):
     await db.users.update_one({"_id": user["_id"]},
                               {"$set": {"failed_logins": 0, "locked_until": None}})
     if not user.get("two_factor", False):
-        return _issue_session(user, response)
-    cid, delivered = await _create_challenge(user)
+        return _issue_session(user, response, body.remember)
+    cid, delivered = await _create_challenge(user, body.remember)
     if not delivered and TWO_FACTOR_FALLBACK:
         # E-posta gönderilemedi: kullanıcı kilitlenmesin, şifre doğru olduğu için oturum açılır
         await db.login_challenges.update_one({"_id": ObjectId(cid)}, {"$set": {"used": True}})
         await log_action(user, "Giriş", "2FA_ATLANDI",
                          "E-posta gönderilemediği için doğrulama kodu adımı atlandı")
-        return _issue_session(user, response)
+        return _issue_session(user, response, body.remember)
     return {"two_factor": True, "challenge_id": cid, "email": email, "gonderildi": delivered,
             "mesaj": ("Doğrulama kodu e-posta adresinize gönderildi (5 dakika geçerli)."
                       if delivered else
@@ -276,7 +277,7 @@ async def verify_code(body: VerifyCodeInput, response: Response):
     user = await db.users.find_one({"_id": ObjectId(ch["user_id"])})
     if not user or not user.get("active", True):
         raise HTTPException(status_code=403, detail="Hesabınız pasif durumda")
-    return _issue_session(user, response)
+    return _issue_session(user, response, bool(ch.get("remember")))
 
 
 @api.post("/auth/resend-code")
@@ -288,7 +289,7 @@ async def resend_code(body: ResendCodeInput):
     if not user:
         raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
     await db.login_challenges.update_one({"_id": ch["_id"]}, {"$set": {"used": True}})
-    cid, delivered = await _create_challenge(user)
+    cid, delivered = await _create_challenge(user, bool(ch.get("remember")))
     return {"challenge_id": cid, "gonderildi": delivered,
             "mesaj": ("Yeni doğrulama kodu gönderildi." if delivered
                       else "Kod oluşturuldu ancak e-posta gönderilemedi, tekrar deneyin.")}

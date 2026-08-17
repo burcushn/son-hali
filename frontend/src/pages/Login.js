@@ -10,8 +10,9 @@ import { Label } from "@/components/ui/label";
 export default function Login() {
   const { login, verifyCode, resendCode } = useAuth();
   const nav = useNavigate();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(localStorage.getItem("remember_email") || "");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(!!localStorage.getItem("remember_email"));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [challenge, setChallenge] = useState(null);
@@ -23,7 +24,7 @@ export default function Login() {
     setBusy(true);
     setError("");
     try {
-      const res = await login(email, password);
+      const res = await login(email, password, remember);
       if (res?.two_factor) {
         setChallenge(res.challenge_id);
         setInfo(res.mesaj || "Doğrulama kodu e-posta adresinize gönderildi.");
@@ -153,6 +154,11 @@ export default function Login() {
                 placeholder="••••••••"
               />
             </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <input type="checkbox" checked={remember} data-testid="login-remember-checkbox"
+                     onChange={(e) => setRemember(e.target.checked)} />
+              Beni hatırla <span className="text-xs text-muted-foreground">(30 gün açık kalsın)</span>
+            </label>
             {error && (
               <div
                 data-testid="login-error"
