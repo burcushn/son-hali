@@ -158,6 +158,9 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
 - Test: iteration_10 (110/110), iteration_11 (yeni 17/17; kalan failler harici Emergent 429
   rate-limit kaynaklı, izole koşuda geçti).
 
+- **Diğer PC'lerden erişim (2026-06):** `ag-erisimi-ayarla.bat` (IP tespiti, frontend/backend .env
+  güncelleme, güvenlik duvarında 3000/8001 açma) + `DIGER-PCLERDEN-ACMA.md` kılavuzu.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)
