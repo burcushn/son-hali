@@ -46,7 +46,9 @@ def build_html(decs: list) -> tuple:
     gecmis = [d for d in decs if d["sure_durum"] == "GECMIS"]
     yaklasan = [d for d in decs if d["sure_durum"] == "YAKLASAN"]
     ibkb = [d for d in decs if d["ibkb_durum"] == "DUZENLENMEDI" and d["durum"] != "KAPALI"]
-    destek = [d for d in decs if d["destek_durum"] == "ALINMADI" and d["durum"] != "KAPALI"]
+    destek = [d for d in decs
+              if d["destek_durum"] == "ALINMADI" and d["durum"] != "KAPALI"
+              and not d.get("destek_kapsam_disi")]
 
     def rows(items, extra=None):
         out = []

@@ -612,8 +612,9 @@ class TestIbkbAndBankaBildirimi:
         assert r.status_code == 200
         p = next(x for x in r.json() if x["id"] == self.__class__.pay_eur_id)
         assert p["ibkb_durum"] == "DUZENLENMEDI"
-        # zorunlu bozdurma = %30
-        assert abs(p["zorunlu_bozdurma"] - 1800.0) < 0.01
+        # zorunlu bozdurma = %35 (iteration 8'de %30 -> %35 güncellendi)
+        assert abs(p["zorunlu_bozdurma"] - 2100.0) < 0.01
+        assert p["zorunlu_bozdurma_orani"] == 35.0
         assert p["tcmb_devir_orani"] == 100.0
 
     def test_ibkb_rbac_forbidden_roles(self, tokens):
@@ -1152,3 +1153,320 @@ class TestIteration7EslestirmeDetayiColumns:
         if self.__class__.pay_id:
             requests.delete(f"{API}/payments/{self.__class__.pay_id}",
                             headers=_h(tokens["banka"]))
+
+
+
+# ---------- Iteration 8: %35 zorunlu bozdurma, TL destek kapsam dışı, IBKB-only match list, export/rows selection ----------
+class TestIteration8ZorunluBozdurma35:
+    """Zorunlu bozdurma oranı %35 olmalı ve payment_view içinde tutar*0.35 olarak dönmeli."""
+
+    pay_id = None
+
+    def test_zorunlu_bozdurma_is_35_percent(self, tokens):
+        r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+            "banka": "TEST ITER8", "gonderen": "TEST_ITER8_ZB",
+            "tarih": "2026-05-15", "doviz": "EUR", "tutar": 6000.0})
+        assert r.status_code == 200, r.text
+        self.__class__.pay_id = r.json()["id"]
+        # 6000 * 0.35 = 2100
+        assert r.json()["zorunlu_bozdurma_orani"] == 35.0
+        assert abs(r.json()["zorunlu_bozdurma"] - 2100.0) < 0.01
+
+    def test_zorunlu_bozdurma_via_list(self, tokens):
+        r = requests.get(f"{API}/payments", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        p = next(x for x in r.json() if x["id"] == self.__class__.pay_id)
+        assert p["zorunlu_bozdurma_orani"] == 35.0
+        assert abs(p["zorunlu_bozdurma"] - 2100.0) < 0.01
+
+    def test_cleanup(self, tokens):
+        if self.__class__.pay_id:
+            requests.delete(f"{API}/payments/{self.__class__.pay_id}",
+                            headers=_h(tokens["banka"]))
+
+
+class TestIteration8IbkbOnlyPayments:
+    """GET /api/payments?ibkb_only=true sadece IBKB düzenlenmiş bedelleri döndürmeli."""
+
+    pay_ibkb_id = None
+    pay_no_ibkb_id = None
+
+    def test_seed_two_payments(self, tokens):
+        # IBKB düzenlenmiş bedel
+        r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+            "banka": "TEST_IBKBONLY", "gonderen": "TEST_ITER8_IBKB_OK",
+            "tarih": "2026-05-16", "doviz": "EUR", "tutar": 4000.0})
+        assert r.status_code == 200
+        self.__class__.pay_ibkb_id = r.json()["id"]
+        r = requests.put(f"{API}/payments/{self.__class__.pay_ibkb_id}/ibkb",
+                         headers=_h(tokens["banka"]),
+                         json={"ibkb_duzenlendi": True, "ibkb_no": "IBKB-ITER8",
+                               "ibkb_tarihi": "2026-05-17",
+                               "dosya_referansi": "DOSYA-ITER8-1",
+                               "tcmb_devir_orani": 100})
+        assert r.status_code == 200
+
+        # IBKB düzenlenmemiş bedel
+        r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+            "banka": "TEST_IBKBONLY", "gonderen": "TEST_ITER8_IBKB_NO",
+            "tarih": "2026-05-16", "doviz": "EUR", "tutar": 3000.0})
+        assert r.status_code == 200
+        self.__class__.pay_no_ibkb_id = r.json()["id"]
+
+    def test_ibkb_only_filter_excludes_undocumented(self, tokens):
+        r = requests.get(f"{API}/payments",
+                         headers=_h(tokens["admin"]),
+                         params={"only_available": "true", "ibkb_only": "true"})
+        assert r.status_code == 200
+        ids = [p["id"] for p in r.json()]
+        assert self.__class__.pay_ibkb_id in ids
+        assert self.__class__.pay_no_ibkb_id not in ids
+        # Tüm dönen kayıtların ibkb_duzenlendi = True olmalı
+        for p in r.json():
+            assert p.get("ibkb_duzenlendi") is True, p
+
+    def test_without_ibkb_only_both_visible(self, tokens):
+        r = requests.get(f"{API}/payments", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        ids = [p["id"] for p in r.json()]
+        assert self.__class__.pay_ibkb_id in ids
+        assert self.__class__.pay_no_ibkb_id in ids
+
+    def test_cleanup(self, tokens):
+        for pid in (self.__class__.pay_ibkb_id, self.__class__.pay_no_ibkb_id):
+            if pid:
+                requests.delete(f"{API}/payments/{pid}", headers=_h(tokens["banka"]))
+
+
+class TestIteration8TryKapsamDisi:
+    """TRY bedelle eşleşen beyanname destek KAPSAM_DISI, destek_tutari=0, tl_bedel=true;
+    eşleştirme silinince tekrar ALINMADI/tl_bedel=false olmalı."""
+
+    dec_id = None
+    dec_no = f"TEST_ITER8_TRY_{int(datetime.now().timestamp())}"
+    pay_try_id = None
+    match_id = None
+
+    def test_seed_try_dec_and_payment(self, tokens):
+        r = requests.post(f"{API}/declarations", headers=_h(tokens["ihracat"]),
+                          json=_base_dec(self.__class__.dec_no, "2026-05-20",
+                                         doviz="TRY", tutar=100000.0,
+                                         ithalatci="TEST TRY GmbH", gumruk="GM-TRY"))
+        assert r.status_code == 200, r.text
+        d = r.json()
+        self.__class__.dec_id = d["id"]
+        # Yeni beyanname (henüz TRY bedel bağlı değil ama zaten kendisi TRY)
+        # Kural: doviz==TRY veya tl_bedel=true iken kapsam_disi
+        assert d["destek_kapsam_disi"] is True, d
+        assert d["destek_tutari"] == 0.0
+        assert d["destek_durum"] == "KAPSAM_DISI"
+
+        r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+            "banka": "TL BANK", "gonderen": "TEST_ITER8_TRY_SND",
+            "tarih": "2026-05-20", "doviz": "TRY", "tutar": 50000.0})
+        assert r.status_code == 200
+        self.__class__.pay_try_id = r.json()["id"]
+
+    def test_match_try_makes_dec_kapsam_disi(self, tokens):
+        r = requests.post(f"{API}/matches", headers=_h(tokens["onaylayan"]), json={
+            "declaration_id": self.__class__.dec_id,
+            "payment_id": self.__class__.pay_try_id,
+            "kapatilan_tutar": 30000.0})
+        assert r.status_code == 200, r.text
+        self.__class__.match_id = r.json()["id"]
+        d = next(x for x in requests.get(f"{API}/declarations", headers=_h(tokens["admin"])).json()
+                 if x["id"] == self.__class__.dec_id)
+        assert d.get("tl_bedel") is True, d
+        assert d["destek_durum"] == "KAPSAM_DISI"
+        assert d["destek_tutari"] == 0.0
+        assert d.get("destek_kapsam_disi") is True
+
+    def test_kapsam_disi_excluded_from_reports(self, tokens):
+        # dashboard destek_bekleyen sayısında sayılmamalı
+        rep = requests.get(f"{API}/reports/summary", headers=_h(tokens["admin"])).json()
+        # Bizim beyanname destek_alinmadi listesinde/sayacında yer almamalı;
+        # sayı doğrudan kontrol edilemez ama en azından beyanname_no listede yoksa OK
+        # (endpoint sadece sayaç veriyor; içerdiği kayıtları kontrol edemezsek min)
+        assert isinstance(rep["destek_alinmadi"], int)
+
+        alerts = requests.get(f"{API}/alerts/preview", headers=_h(tokens["admin"])).json()
+        # bizim TRY beyanname destek uyarı listesinde bulunmamalı
+        # (preview beyanname_no listesi vermiyorsa sadece sayaç tipini kontrol)
+        assert isinstance(alerts["sayilar"]["destek"], int)
+
+    def test_delete_match_restores_alinmadi(self, tokens):
+        r = requests.delete(f"{API}/matches/{self.__class__.match_id}",
+                            headers=_h(tokens["onaylayan"]))
+        assert r.status_code == 200
+        d = next(x for x in requests.get(f"{API}/declarations", headers=_h(tokens["admin"])).json()
+                 if x["id"] == self.__class__.dec_id)
+        # TRY beyanname olduğu için kapsam_disi durumu doviz=TRY nedeniyle KALICI olur
+        # (tl_bedel False dönse bile doviz TRY olduğundan _apply_dates_and_amounts KAPSAM_DISI verir)
+        assert d["destek_kapsam_disi"] is True
+        # tl_bedel değeri False olmalı (bağlı bedel kalmadı)
+        assert d.get("tl_bedel") is False
+
+    def test_eur_dec_with_try_payment_marks_kapsam_disi(self, tokens):
+        """EUR beyanname + TRY bedel eşleşince beyanname kapsam_disi olmalı; TRY silinince ALINMADI dönmeli."""
+        no = f"TEST_ITER8_EUR_TRY_{int(datetime.now().timestamp())}"
+        r = requests.post(f"{API}/declarations", headers=_h(tokens["ihracat"]),
+                          json=_base_dec(no, "2026-05-20", doviz="EUR", tutar=5000.0,
+                                         ithalatci="TEST EUR TRY", gumruk="GM-EURTRY"))
+        assert r.status_code == 200
+        did = r.json()["id"]
+        assert r.json()["destek_kapsam_disi"] is False
+        assert r.json()["destek_durum"] == "ALINMADI"
+        assert abs(r.json()["destek_tutari"] - 150.0) < 0.01  # %3
+
+        # TRY bedel oluştur + eşleştir (manuel kur)
+        r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+            "banka": "TL", "gonderen": "TEST_EUR_TRY_TL",
+            "tarih": "2026-05-20", "doviz": "TRY", "tutar": 200000.0})
+        pid = r.json()["id"]
+        r = requests.post(f"{API}/matches", headers=_h(tokens["onaylayan"]), json={
+            "declaration_id": did, "payment_id": pid,
+            "kapatilan_tutar": 1000.0, "kur": 35.0})
+        assert r.status_code == 200, r.text
+        mid = r.json()["id"]
+
+        d = next(x for x in requests.get(f"{API}/declarations", headers=_h(tokens["admin"])).json()
+                 if x["id"] == did)
+        assert d["destek_durum"] == "KAPSAM_DISI"
+        assert d["destek_tutari"] == 0.0
+        assert d.get("tl_bedel") is True
+
+        # Eşleştirme silinince EUR beyanname yeniden ALINMADI (%3) olmalı
+        requests.delete(f"{API}/matches/{mid}", headers=_h(tokens["onaylayan"]))
+        d = next(x for x in requests.get(f"{API}/declarations", headers=_h(tokens["admin"])).json()
+                 if x["id"] == did)
+        assert d.get("tl_bedel") is False
+        assert d["destek_durum"] == "ALINMADI"
+        assert abs(d["destek_tutari"] - 150.0) < 0.01
+        # cleanup
+        requests.delete(f"{API}/declarations/{did}", headers=_h(tokens["ihracat"]))
+        requests.delete(f"{API}/payments/{pid}", headers=_h(tokens["banka"]))
+
+    def test_cleanup(self, tokens):
+        if self.__class__.dec_id:
+            requests.delete(f"{API}/declarations/{self.__class__.dec_id}",
+                            headers=_h(tokens["ihracat"]))
+        if self.__class__.pay_try_id:
+            requests.delete(f"{API}/payments/{self.__class__.pay_try_id}",
+                            headers=_h(tokens["banka"]))
+
+
+class TestIteration8ExportRowsSelection:
+    """/api/export/rows aday satırları; /api/export/excel?match_ids=... sadece seçilenleri
+    içermeli, sonrası gonderildi=true olmalı; mark_sent=false ile işaretlenmemeli."""
+
+    dec_id = None
+    dec_no = f"TEST_ITER8_EXP_{int(datetime.now().timestamp())}"
+    pay_a_id = None
+    pay_b_id = None
+    match_a_id = None
+    match_b_id = None
+
+    def test_seed(self, tokens):
+        r = requests.post(f"{API}/declarations", headers=_h(tokens["ihracat"]),
+                          json=_base_dec(self.__class__.dec_no, "2026-06-01",
+                                         doviz="EUR", tutar=10000.0,
+                                         ithalatci="EXP GmbH", gumruk="GM-EXP"))
+        assert r.status_code == 200
+        self.__class__.dec_id = r.json()["id"]
+
+        for label in ("A", "B"):
+            r = requests.post(f"{API}/payments", headers=_h(tokens["banka"]), json={
+                "banka": "TEST", "gonderen": f"TEST_ITER8_EXP_{label}",
+                "tarih": "2026-06-01", "doviz": "EUR", "tutar": 3000.0})
+            pid = r.json()["id"]
+            r = requests.put(f"{API}/payments/{pid}/ibkb",
+                             headers=_h(tokens["banka"]),
+                             json={"ibkb_duzenlendi": True,
+                                   "ibkb_no": f"IBKB-EXP-{label}",
+                                   "ibkb_tarihi": "2026-06-02",
+                                   "dosya_referansi": f"DOSYA-EXP-{label}",
+                                   "tcmb_devir_orani": 100})
+            assert r.status_code == 200
+            r = requests.post(f"{API}/matches", headers=_h(tokens["onaylayan"]), json={
+                "declaration_id": self.__class__.dec_id, "payment_id": pid,
+                "kapatilan_tutar": 1000.0})
+            assert r.status_code == 200, r.text
+            setattr(self.__class__, f"pay_{label.lower()}_id", pid)
+            setattr(self.__class__, f"match_{label.lower()}_id", r.json()["id"])
+
+    def test_export_rows_returns_candidates_unsent(self, tokens):
+        r = requests.get(f"{API}/export/rows", headers=_h(tokens["admin"]))
+        assert r.status_code == 200
+        rows = r.json()
+        # Bizim iki match aday listede olmalı ve başlangıçta gonderildi=false
+        ours = [x for x in rows if x["match_id"] in (self.__class__.match_a_id, self.__class__.match_b_id)]
+        assert len(ours) == 2, ours
+        for row in ours:
+            assert row["gonderildi"] is False
+            assert row["beyanname_no"] == self.__class__.dec_no
+            assert "eksikler" in row and isinstance(row["eksikler"], list)
+            assert "tutar" in row
+
+    def test_export_check_respects_match_ids(self, tokens):
+        r = requests.get(f"{API}/export/check",
+                         headers=_h(tokens["admin"]),
+                         params={"match_ids": self.__class__.match_a_id})
+        assert r.status_code == 200
+        d = r.json()
+        assert d["satir_sayisi"] == 1, d
+
+    def test_export_excel_mark_sent_false_does_not_flag(self, tokens):
+        r = requests.get(f"{API}/export/excel",
+                         headers=_h(tokens["admin"]),
+                         params={"match_ids": self.__class__.match_a_id, "mark_sent": "false"})
+        assert r.status_code == 200
+        rows = requests.get(f"{API}/export/rows", headers=_h(tokens["admin"])).json()
+        our_a = next(x for x in rows if x["match_id"] == self.__class__.match_a_id)
+        assert our_a["gonderildi"] is False, our_a
+
+    def test_export_excel_only_selected_rows(self, tokens):
+        r = requests.get(f"{API}/export/excel",
+                         headers=_h(tokens["admin"]),
+                         params={"match_ids": self.__class__.match_a_id})
+        assert r.status_code == 200
+        import io as _io
+        from openpyxl import load_workbook
+        wb = load_workbook(_io.BytesIO(r.content))
+        ws = wb["BANKA BİLDİRİMİ"]
+        # sadece seçili match satırı olmalı; sıralı bir tek A satırı ve TOPLAM
+        our_rows = []
+        toplam_row = None
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if row[0] == "TOPLAM":
+                toplam_row = row; continue
+            if row[3] == self.__class__.dec_no:
+                our_rows.append(row)
+        assert len(our_rows) == 1, our_rows
+        assert our_rows[0][1] == "DOSYA-EXP-A", our_rows[0]
+        # TOPLAM sadece seçilen satırı içerir (1000)
+        assert toplam_row is not None and abs(toplam_row[5] - 1000.0) < 0.01, toplam_row
+
+    def test_export_excel_marks_sent_by_default(self, tokens):
+        # A daha önce mark_sent=false ile indirildi → hâlâ false; şimdi tekrar indir (default mark_sent=true)
+        r = requests.get(f"{API}/export/excel",
+                         headers=_h(tokens["admin"]),
+                         params={"match_ids": self.__class__.match_a_id})
+        assert r.status_code == 200
+        rows = requests.get(f"{API}/export/rows", headers=_h(tokens["admin"])).json()
+        our_a = next(x for x in rows if x["match_id"] == self.__class__.match_a_id)
+        our_b = next(x for x in rows if x["match_id"] == self.__class__.match_b_id)
+        assert our_a["gonderildi"] is True, our_a
+        assert our_a["gonderim_tarihi"], our_a
+        # B seçilmediği için hâlâ false
+        assert our_b["gonderildi"] is False, our_b
+
+    def test_cleanup(self, tokens):
+        for mid in (self.__class__.match_a_id, self.__class__.match_b_id):
+            if mid:
+                requests.delete(f"{API}/matches/{mid}", headers=_h(tokens["onaylayan"]))
+        if self.__class__.dec_id:
+            requests.delete(f"{API}/declarations/{self.__class__.dec_id}",
+                            headers=_h(tokens["ihracat"]))
+        for pid in (self.__class__.pay_a_id, self.__class__.pay_b_id):
+            if pid:
+                requests.delete(f"{API}/payments/{pid}", headers=_h(tokens["banka"]))

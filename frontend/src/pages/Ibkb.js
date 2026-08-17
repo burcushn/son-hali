@@ -97,7 +97,7 @@ export default function Ibkb() {
               <th className="px-3 py-2.5 font-medium">Gönderen / Banka</th>
               <th className="px-3 py-2.5 font-medium">Tarih</th>
               <th className="px-3 py-2.5 font-medium text-right">Gelen Tutar</th>
-              <th className="px-3 py-2.5 font-medium text-right">Zorunlu Bozdurma (%30)</th>
+              <th className="px-3 py-2.5 font-medium text-right">Zorunlu Bozdurma (%35)</th>
               <th className="px-3 py-2.5 font-medium">IBKB No / Tarih</th>
               <th className="px-3 py-2.5 font-medium">Dosya Referansı</th>
               <th className="px-3 py-2.5 font-medium">DTH IBAN (döviz)</th>
@@ -156,7 +156,7 @@ export default function Ibkb() {
             {form && (
               <DialogDescription>
                 {form.gonderen} · {form.banka} · Gelen tutar{" "}
-                <span className="mono">{fmt(form.tutar, form.doviz)}</span> · Zorunlu bozdurma (%30){" "}
+                <span className="mono">{fmt(form.tutar, form.doviz)}</span> · Zorunlu bozdurma (%35){" "}
                 <span className="mono">{fmt(form.zorunlu_bozdurma, form.doviz)}</span>
               </DialogDescription>
             )}

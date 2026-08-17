@@ -105,6 +105,25 @@ Frontend: `pages/` (Login, Dashboard, Declarations, Payments, AuditLog, Reports,
   zaten içeriyordu ve dolu geliyor (kullanıcı yeniden indirip doğruladı).
 - Test: iteration_7.json — 74/75 PASS. Tek fail pre-existing EMERGENT_EMAIL_KEY 401 (e-posta).
 
+## Güncelleme (2026-06, 9. tur) — kullanıcı geri bildirimleri
+- **IBKB düzenlenmemiş bedel "Bedel Bağla" ekranına gelmiyor** (`GET /api/payments?ibkb_only=true`);
+  banka IBKB'siz bedeli kabul etmediği ve dosya referansı oluşmadığı için.
+- **Bedel TL geldiyse %3 destek kapsam dışı:** `recalc_declaration` eşleşen bedellerden biri TRY ise
+  beyannameye `tl_bedel=true` yazar; `declaration_view` → `destek_tutari=0`,
+  `destek_durum="KAPSAM_DISI"`, `destek_kapsam_disi=true`. Dashboard, raporlar ve haftalık
+  uyarı e-postası bu beyannameleri destek bekleyen olarak saymaz.
+- **Zorunlu bozdurma oranı %30 → %35** (`ZORUNLU_BOZDURMA_ORANI`, IBKB ekranı etiketleri dahil).
+- **Excel'de satır seçimi:** `GET /api/export/rows` aday satırları döner; `GET /api/export/excel`
+  ve `/export/check` artık `match_ids` filtresi alır; indirilen satırlar
+  `bankaya_gonderildi=true, gonderim_tarihi` ile işaretlenir (`mark_sent`). Frontend:
+  `components/ExportDialog.js` (Raporlar + Beyannameler "Excel Aktar" butonları) — onay kutuları,
+  "daha önce gönderilenleri gizle", eksik alan uyarıları.
+- **Kurumsal logo** (`frontend/public/assets/logo.jpg`) sol menü üstünde ve giriş ekranında.
+- Giriş ekranında altta ortada proje sahibi adı: **Burcu Şahin**; demo hesap listesi kaldırıldı.
+
+- Giriş ekranında kurumsal logo; proje sahibi ismi kullanıcı isteğiyle **şimdilik kaldırıldı**
+  (istenirse el yazısı fontla sağ koyu alana geri eklenebilir). Demo hesap listesi kaldırıldı.
+
 ## Backlog
 - P0: Bankanın resmi Excel şablonuna birebir uyarlama (müşteri dosyayı paylaşacak)
 - P0: Bedel (banka girişi) formuna bankadan gelen ek alanların eklenmesi (müşteri alan listesini paylaşacak)

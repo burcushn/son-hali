@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { FileDown, Mail, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { api, errMsg, fmt, can, downloadBankExcel } from "@/lib/apiClient";
+import { api, errMsg, fmt, can } from "@/lib/apiClient";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Layout";
+import { ExportDialog } from "@/components/ExportDialog";
 import { Button } from "@/components/ui/button";
 
 export default function Reports() {
@@ -12,6 +13,7 @@ export default function Reports() {
   const [d, setD] = useState(null);
   const [alert, setAlert] = useState(null);
   const [sending, setSending] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     api.get("/reports/summary").then(({ data }) => setD(data));
@@ -31,21 +33,18 @@ export default function Reports() {
   };
 
   const exportExcel = async () => {
-    try {
-      const ok = await downloadBankExcel();
-      if (ok) toast.success("Excel indirildi");
-    } catch (e) {
-      toast.error(errMsg(e));
-    }
+    setExportOpen(true);
   };
 
   return (
     <div data-testid="reports-page">
       <PageHeader title="Raporlar" desc="Döviz, ülke ve ay bazlı kapatma özetleri">
-        <Button className="rounded-sm" onClick={exportExcel} data-testid="reports-export-button">
+        <Button className="rounded-sm" onClick={() => setExportOpen(true)} data-testid="reports-export-button">
           <FileDown className="h-4 w-4 mr-1.5" /> Banka Bildirim Excel
         </Button>
       </PageHeader>
+
+      <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
 
       {alert && (
         <div className="border border-border bg-card rounded-sm p-4 mb-4" data-testid="alert-card">

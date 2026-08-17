@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Link2, FileDown, Search } from "lucide-react";
-import { api, errMsg, fmt, fmtDate, CURRENCIES, D_STATUS, can, downloadBankExcel } from "@/lib/apiClient";
+import { api, errMsg, fmt, fmtDate, CURRENCIES, D_STATUS, can } from "@/lib/apiClient";
 import { useAuth } from "@/context/AuthContext";
 import { PageHeader, Badge2 } from "@/components/Layout";
+import { ExportDialog } from "@/components/ExportDialog";
 import { MatchDialog } from "@/components/MatchDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ const IBKB_OK = { label: "DÜZENLENDİ", cls: OK_CLS };
 const IBKB_NOK = { label: "DÜZENLENMEDİ", cls: NOK_CLS };
 const OK = { label: "ALINDI", cls: OK_CLS };
 const NOK = { label: "ALINMADI", cls: NOK_CLS };
+const DISI = { label: "KAPSAM DIŞI (TL)", cls: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800" };
 
 export default function Declarations() {
   const { user } = useAuth();
@@ -41,6 +43,7 @@ export default function Declarations() {
   const [ibkb, setIbkb] = useState("");
   const [destek, setDestek] = useState("");
   const [form, setForm] = useState(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const [matchFor, setMatchFor] = useState(null);
 
   const load = useCallback(async () => {
@@ -89,14 +92,7 @@ export default function Declarations() {
     }
   };
 
-  const exportExcel = async () => {
-    try {
-      const ok = await downloadBankExcel({ durum });
-      if (ok) toast.success("Excel indirildi");
-    } catch (e) {
-      toast.error(errMsg(e));
-    }
-  };
+  const exportExcel = () => setExportOpen(true);
 
   return (
     <div data-testid="declarations-page">
@@ -194,8 +190,14 @@ export default function Declarations() {
                   <Badge2 cfg={d.ibkb_durum === "DUZENLENDI" ? IBKB_OK : IBKB_NOK} testid={`declaration-ibkb-${d.id}`} />
                 </td>
                 <td className="px-3 py-2">
-                  <div className="mono text-xs mb-1">{fmt(d.destek_tutari, d.doviz)}</div>
-                  <Badge2 cfg={d.destek_durum === "ALINDI" ? OK : NOK} testid={`declaration-destek-${d.id}`} />
+                  {d.destek_kapsam_disi ? (
+                    <Badge2 cfg={DISI} testid={`declaration-destek-${d.id}`} />
+                  ) : (
+                    <>
+                      <div className="mono text-xs mb-1">{fmt(d.destek_tutari, d.doviz)}</div>
+                      <Badge2 cfg={d.destek_durum === "ALINDI" ? OK : NOK} testid={`declaration-destek-${d.id}`} />
+                    </>
+                  )}
                 </td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
                   <Button variant="outline" size="sm" className="rounded-sm h-7 mr-1"
@@ -305,6 +307,8 @@ export default function Declarations() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ExportDialog open={exportOpen} onOpenChange={setExportOpen} />
 
       <MatchDialog
         declaration={matchFor}

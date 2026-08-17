@@ -2,14 +2,13 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, FileText, Landmark, History, BarChart3, Users, LogOut,
-  Moon, Sun, Menu, X, ShieldCheck, FileCheck2,
+  Moon, Sun, Menu, X, FileCheck2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ROLE_LABELS } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 
-const NAV = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
+const NAV = [  { to: "/", label: "Dashboard", icon: LayoutDashboard, id: "nav-dashboard" },
   { to: "/beyannameler", label: "Beyanname Yönetimi", icon: FileText, id: "nav-declarations" },
   { to: "/bedeller", label: "Bedel Yönetimi", icon: Landmark, id: "nav-payments" },
   { to: "/ibkb", label: "IBKB İşlemleri", icon: FileCheck2, id: "nav-ibkb" },
@@ -39,12 +38,11 @@ export const Layout = () => {
         }`}
       >
         <div className="h-16 flex items-center gap-3 px-5 border-b border-border">
-          <div className="h-8 w-8 bg-primary flex items-center justify-center rounded-sm">
-            <ShieldCheck className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <div className="leading-tight">
-            <div className="font-display font-semibold text-sm">İHRACAT BEDELİ</div>
-            <div className="text-[10px] tracking-widest text-muted-foreground uppercase">
+          <img src="/assets/logo.jpg" alt="Kalıpsan Alüminyum" data-testid="sidebar-logo"
+               className="h-9 w-auto max-w-[160px] object-contain" />
+          <div className="leading-tight border-l border-border pl-3">
+            <div className="font-display font-semibold text-[11px]">İHRACAT BEDELİ</div>
+            <div className="text-[9px] tracking-widest text-muted-foreground uppercase">
               Kapatma Sistemi
             </div>
           </div>

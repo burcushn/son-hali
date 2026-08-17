@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 8: 5 kullanıcı düzeltmesi test edildi — (1) MatchDialog artık ibkb_only=true çağırıyor; IBKB'siz bedeller listelenmiyor. (2) TRY dövizli beyanname veya TL bedelle eşleşen beyanname destek_durum=KAPSAM_DISI + destek_tutari=0 + destek_kapsam_disi=true; eşleştirme silinince tl_bedel=false, EUR beyanname %3'e döner. (3) ZORUNLU_BOZDURMA_ORANI=35 → 6000 EUR bedelde 2100 EUR; UI 'ZORUNLU BOZDURMA (%35)' ve 15000*0.35=5250 doğru. (4) /api/export/rows aday satırları döner, /api/export/excel?match_ids=... sadece seçilenleri içerir ve TOPLAM sadece seçime göre; mark_sent=true ile gonderildi=true + gonderim_tarihi işaretlenir, mark_sent=false ile işaretlenmez. /api/export/check?match_ids=... satir_sayisi seçili sayısını verir. (5) Login ekranı: KALIPSAN logosu (login-logo), altta ortada 'Burcu Şahin' (login-owner-name); demo hesap listesi kaldırılmış (0 'Test1234!' bulundu). Sol menü üstünde sidebar-logo görünür. ExportDialog (export-dialog) hem Raporlar 'Banka Bildirim Excel' (reports-export-button) hem Beyanname Yönetimi 'Excel Aktar' (export-excel-button) ile açılıyor; export-select-all/select-none/hide-sent/selected-count/download-button/rows-table hepsi çalışıyor. Regresyon: dashboard, /api/backup + restore, IBKB excel export (11+17+19 kolonlu 3 sayfa), audit-logs, 2FA akışı, RBAC hepsi geçti. backend_test.py'a TestIteration8ZorunluBozdurma35 (3), TestIteration8IbkbOnlyPayments (4), TestIteration8TryKapsamDisi (6), TestIteration8ExportRowsSelection (6) sınıfları eklendi. TestIbkbAndBankaBildirimi.test_ibkb_payment_view_defaults güncellendi (1800→2100, oran 35 assert). Toplam pytest: 95/95 PASSED (27.76s).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py list_payments: only_available ve ibkb_only Python tarafında liste filtrelemesiyle yapılıyor; büyük veri hacminde MongoDB query'sine push edilmesi (find({'ibkb_duzenlendi': True, 'bakiye': {'$gt': 0.01}})) performansı iyileştirir. Şu an 2000 doküman limitinde sorun yok.",
+    "server.py recalc_declaration (~satır 175-183): tl_bedel = any(pays[str(m['payment_id'])]['doviz'] == 'TRY' ...) — 'pays' fetch tek query. Beyanname birden fazla TRY match olduğunda doğru; ama bir TRY match silindikten sonra recalc'in match_id ile değil declaration_id ile çağrıldığına dikkat edilmeli (test edildi, doğru).",
+    "server.py export_excel mark_sent default=True — kullanıcı yanlışlıkla 'İndir' yapınca satırlar kalıcı 'gönderildi' olur. Frontend'de 'Test modu / işaretleme' toggle'ı UX açısından güvenli. Şu an istenmediği için sadece not."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (95/95 pass)", "frontend": "100% (login logo/Burcu Şahin, sidebar logo, ExportDialog Reports+Declarations, IBKB %35 doğrulandı)"},
+  "seed_data_creation": "Her iteration-8 sınıfı kendi TEST_ITER8_* kayıtlarını üretir ve test_cleanup ile siler; kalıcı yan etki yok.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@ihracat.com / Admin1234! ana admin; demo hesaplar Test1234! (regresyon için).",
+  "context_for_next_testing_agent": "Iteration-8 tüm hedefler geçti. Yeni test sınıfları: TestIteration8ZorunluBozdurma35, TestIteration8IbkbOnlyPayments, TestIteration8TryKapsamDisi, TestIteration8ExportRowsSelection. UI/reports/dashboard için KAPSAM_DISI badge eklendiği doğrulanmadı — declarations sayfasında kontrol istenirse Declarations.js içindeki destek_durum badge kısmına bakınız. /api/alerts/send bu sefer 200 döndü (email key düzeltilmiş olabilir).",
+  "rca_of_the_issue": "İhtiyaç zaten uygulanmış: server.py (%35 sabit, ibkb_only param, tl_bedel/kapsam_disi mantığı, /export/rows-check-excel match_ids/mark_sent). Frontend'de ExportDialog, MatchDialog ibkb_only, Login/Layout logo + Burcu Şahin eklenmiş. Testler bu davranışları uçtan uca kanıtlıyor."
+}

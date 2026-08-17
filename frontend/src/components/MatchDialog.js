@@ -25,7 +25,7 @@ export const MatchDialog = ({ declaration, open, onOpenChange, onChanged }) => {
 
   const load = async () => {
     const [p, m] = await Promise.all([
-      api.get("/payments", { params: { only_available: true } }),
+      api.get("/payments", { params: { only_available: true, ibkb_only: true } }),
       api.get(`/declarations/${declaration.id}/matches`),
     ]);
     setPayments(p.data);
@@ -139,7 +139,9 @@ export const MatchDialog = ({ declaration, open, onOpenChange, onChanged }) => {
         <div className="grid lg:grid-cols-2 gap-6">
           <div className="border border-border rounded-sm">
             <div className="px-3 py-2 border-b border-border flex items-center gap-2">
-              <span className="text-xs uppercase tracking-wide font-medium">Kullanılabilir Bedeller</span>
+              <span className="text-xs uppercase tracking-wide font-medium">
+                Kullanılabilir Bedeller <span className="normal-case text-muted-foreground">(IBKB düzenlenmiş)</span>
+              </span>
               <Input
                 placeholder="Ara..."
                 value={q}
@@ -178,7 +180,11 @@ export const MatchDialog = ({ declaration, open, onOpenChange, onChanged }) => {
                   </tbody>
                 </table>
               ) : (
-                <div className="p-6 text-sm text-muted-foreground">Bakiyesi olan bedel yok.</div>
+                <div className="p-6 text-sm text-muted-foreground" data-testid="match-no-payments">
+                  IBKB'si düzenlenmiş ve bakiyesi olan bedel yok. Banka, IBKB düzenlenmemiş bedeli
+                  kabul etmiyor (dosya referansı da oluşmuyor) — önce <b>IBKB İşlemleri</b>
+                  ekranından IBKB bilgilerini girin.
+                </div>
               )}
             </div>
           </div>

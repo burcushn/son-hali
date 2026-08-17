@@ -113,6 +113,7 @@ class Declaration(BaseDocument):
     taahhut: bool = False
     notlar: str = ""
     durum: str = "ACIK"
+    tl_bedel: bool = False
     created_at: str = Field(default_factory=utcnow_iso)
     created_by: str = ""
 

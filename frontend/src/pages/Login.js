@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { errMsg } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
@@ -64,17 +64,16 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
+    <div className="min-h-screen grid lg:grid-cols-2 relative">
       <div className="flex items-center px-8 sm:px-16 py-16">
         <div className="w-full max-w-sm">
-          <div className="flex items-center gap-3 mb-12">
-            <div className="h-9 w-9 bg-primary flex items-center justify-center rounded-sm">
-              <ShieldCheck className="h-5 w-5 text-primary-foreground" />
-            </div>
+          <div className="mb-12">
+            <img src="/assets/logo.jpg" alt="Kalıpsan Alüminyum" data-testid="login-logo"
+                 className="h-12 w-auto max-w-[240px] object-contain mb-4" />
             <div className="leading-tight">
               <div className="font-display font-semibold text-sm">İHRACAT BEDELİ</div>
               <div className="text-[10px] tracking-widest text-muted-foreground uppercase">
-                Kapatma & Banka Bildirim Sistemi
+                Kapatma &amp; Banka Bildirim Sistemi
               </div>
             </div>
           </div>
@@ -174,16 +173,9 @@ export default function Login() {
             </>
           )}
 
-          <div className="mt-10 border border-border rounded-sm p-4 text-xs text-muted-foreground space-y-1">
-            <div className="font-medium text-foreground mb-1">Demo hesaplar (şifre: Test1234!)</div>
-            <div className="mono">ihracat@ihracat.com — İhracat Personeli</div>
-            <div className="mono">banka@ihracat.com — Banka Personeli</div>
-            <div className="mono">sef@ihracat.com — Onaylayan (Şef)</div>
-            <div className="mono">admin@ihracat.com — Admin / Admin1234!</div>
-            <div className="pt-1">
-              Gerçek e-posta adresiyle açılan hesaplarda giriş sırasında e-postaya 6 haneli
-              doğrulama kodu gönderilir.
-            </div>
+          <div className="mt-10 border border-border rounded-sm p-4 text-xs text-muted-foreground">
+            Hesabınız yoksa sistem yöneticinizden talep edin. Bazı hesaplarda giriş sırasında
+            e-postanıza 6 haneli doğrulama kodu gönderilir.
           </div>
         </div>
       </div>
@@ -204,6 +196,7 @@ export default function Login() {
           </div>
         </div>
       </div>
+
     </div>
   );
 }

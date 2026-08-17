@@ -48,8 +48,7 @@ export const ROLE_LABELS = {
 
 export async function downloadBankExcel(params = {}) {
   const { data: check } = await api.get("/export/check", { params });
-  if (check.eksik_sayisi > 0) {
-    const list = check.eksikler
+  if (check.eksik_sayisi > 0) {    const list = check.eksikler
       .slice(0, 5)
       .map((e) => `• ${e.beyanname_no} (${e.bedel}): ${e.alanlar.join(", ")}`)
       .join("\n");

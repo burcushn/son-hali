@@ -100,13 +100,21 @@ async def log_action(user: dict, modul: str, islem: str, aciklama: str, ref: str
 
 
 # ---------------- helpers ----------------
+ZORUNLU_BOZDURMA_ORANI = 35.0  # % — TCMB zorunlu bozdurma oranı
+
 
 def declaration_view(doc: dict) -> dict:
     d = Declaration.from_mongo(doc).model_dump()
     d["kalan"] = round(d["tutar"] - d["kapatilan"], 2)
-    d["destek_tutari"] = round(d["tutar"] * 0.03, 2)
+    # İhracat bedeli TL olarak geldiyse döviz dönüşüm desteği (%3) kapsam dışıdır
+    tl = bool(d.get("tl_bedel")) or d["doviz"] == "TRY"
+    d["destek_kapsam_disi"] = tl
+    d["destek_tutari"] = 0.0 if tl else round(d["tutar"] * 0.03, 2)
     d["ibkb_durum"] = "DUZENLENDI" if d.get("ibkb_alindi") else "DUZENLENMEDI"
-    d["destek_durum"] = "ALINDI" if d.get("destek_alindi") else "ALINMADI"
+    if tl:
+        d["destek_durum"] = "KAPSAM_DISI"
+    else:
+        d["destek_durum"] = "ALINDI" if d.get("destek_alindi") else "ALINMADI"
     base = d.get("kapanis_tarihi") or d.get("acilis_tarihi") or ""
     try:
         son = datetime.strptime(base[:10], "%Y-%m-%d") + timedelta(days=180)
@@ -136,7 +144,8 @@ def payment_view(doc: dict) -> dict:
     p = Payment.from_mongo(doc).model_dump()
     p["bakiye"] = round(p["tutar"] - p["kullanilan"], 2)
     p["ibkb_durum"] = "DUZENLENDI" if p.get("ibkb_duzenlendi") else "DUZENLENMEDI"
-    p["zorunlu_bozdurma"] = round(p["tutar"] * 0.30, 2)
+    p["zorunlu_bozdurma_orani"] = ZORUNLU_BOZDURMA_ORANI
+    p["zorunlu_bozdurma"] = round(p["tutar"] * ZORUNLU_BOZDURMA_ORANI / 100, 2)
     p["ach_iban_default"] = _LAST_ACH.get("iban") or os.environ.get("DEFAULT_ACH_IBAN", "")
     return p
 
@@ -161,9 +170,17 @@ async def recalc_declaration(did: str):
     ms = await db.matches.find({"declaration_id": did}).to_list(2000)
     total = round(sum(m["kapatilan_tutar"] for m in ms), 2)
     doc = await db.declarations.find_one({"_id": ObjectId(did)})
-    if doc:
-        await db.declarations.update_one({"_id": ObjectId(did)},
-            {"$set": {"kapatilan": total, "durum": dstatus(doc["tutar"], total)}})
+    if not doc:
+        return
+    # bağlanan bedellerden biri TL ise destek (%3) kapsam dışı
+    tl = False
+    for m in ms:
+        p = await db.payments.find_one({"_id": ObjectId(m["payment_id"])}, {"doviz": 1})
+        if p and p.get("doviz") == "TRY":
+            tl = True
+            break
+    await db.declarations.update_one({"_id": ObjectId(did)},
+        {"$set": {"kapatilan": total, "durum": dstatus(doc["tutar"], total), "tl_bedel": tl}})
 
 
 async def recalc_payment(pid: str):
@@ -389,6 +406,7 @@ async def delete_declaration(did: str, user: dict = Depends(require("ihracat")))
 # ---------------- payments ----------------
 @api.get("/payments")
 async def list_payments(durum: str = "", q: str = "", only_available: bool = False,
+                        ibkb_only: bool = False,
                         user: dict = Depends(get_current_user)):
     query = {}
     if durum:
@@ -401,6 +419,9 @@ async def list_payments(durum: str = "", q: str = "", only_available: bool = Fal
     items = [payment_view(d) for d in docs]
     if only_available:
         items = [i for i in items if i["bakiye"] > 0.01]
+    if ibkb_only:
+        # IBKB düzenlenmemiş bedel bankaya bildirilemez (dosya referansı da oluşmaz)
+        items = [i for i in items if i.get("ibkb_duzenlendi")]
     return items
 
 
@@ -585,7 +606,7 @@ async def dashboard(user: dict = Depends(get_current_user)):
         bu_ay[cur] = round(bu_ay.get(cur, 0) + float(m.get("kapatilan_tutar") or 0), 2)
 
     # bekleyen destek ödemesi (%3): destek alınmamış beyannameler
-    destek_bekleyen = [d for d in decs if not d.get("destek_alindi")]
+    destek_bekleyen = [d for d in decs if not d.get("destek_alindi") and not d.get("destek_kapsam_disi")]
     destek_tutar = {}
     for d in destek_bekleyen:
         destek_tutar[d["doviz"]] = round(destek_tutar.get(d["doviz"], 0) + float(d.get("kapatilan") or 0), 2)
@@ -720,39 +741,81 @@ async def _match_maps():
     return decs, pays
 
 
-@api.get("/export/check")
-async def export_check(durum: str = "", user: dict = Depends(get_current_user)):
-    """Excel alınmadan önce banka bildiriminde boş kalacak alanları listeler."""
-    matches = await db.matches.find({}).to_list(5000)
+@api.get("/export/rows")
+async def export_rows(user: dict = Depends(get_current_user)):
+    """Excel'e girecek aday satırlar — kullanıcı hangilerini göndereceğini seçer."""
+    matches = await db.matches.find({}).sort("tarih", 1).to_list(5000)
     dec_map, pay_map = await _match_maps()
-    eksikler = []
+    out = []
     for m in matches:
         d = dec_map.get(str(m["declaration_id"]))
         p = pay_map.get(str(m["payment_id"]))
         if not d or not p:
             continue
+        alanlar = _missing_fields(d, p)
+        out.append({
+            "match_id": str(m["_id"]),
+            "beyanname_no": d["beyanname_no"],
+            "gb_tarihi": (d.get("acilis_tarihi") or "")[:10],
+            "ithalatci": d.get("ithalatci", ""),
+            "dosya_referansi": p.get("dosya_referansi", ""),
+            "bedel": p.get("gonderen", ""),
+            "tutar": m["kapatilan_tutar"],
+            "doviz": d["doviz"],
+            "gonderildi": bool(m.get("bankaya_gonderildi")),
+            "gonderim_tarihi": m.get("gonderim_tarihi", ""),
+            "eksikler": alanlar,
+        })
+    return out
+
+
+def _missing_fields(d: dict, p: dict) -> list:
+    alanlar = []
+    if not p.get("dosya_referansi"):
+        alanlar.append("Dosya Referansı")
+    if not d.get("gumruk_mudurlugu_no"):
+        alanlar.append("Gümrük Müdürlüğü Kodu")
+    if not p.get("dth_iban"):
+        alanlar.append("DTH IBAN")
+    if not (p.get("ach_iban") or os.environ.get("DEFAULT_ACH_IBAN", "")):
+        alanlar.append("ACH IBAN")
+    if not p.get("ibkb_duzenlendi"):
+        alanlar.append("IBKB kaydı")
+    return alanlar
+
+
+def _selected(m: dict, ids: set) -> bool:
+    return not ids or str(m["_id"]) in ids
+
+
+@api.get("/export/check")
+async def export_check(durum: str = "", match_ids: str = "",
+                       user: dict = Depends(get_current_user)):
+    """Excel alınmadan önce banka bildiriminde boş kalacak alanları listeler."""
+    ids = {i for i in match_ids.split(",") if i}
+    matches = await db.matches.find({}).to_list(5000)
+    dec_map, pay_map = await _match_maps()
+    eksikler, secili = [], 0
+    for m in matches:
+        d = dec_map.get(str(m["declaration_id"]))
+        p = pay_map.get(str(m["payment_id"]))
+        if not d or not p or not _selected(m, ids):
+            continue
         if durum and d.get("durum") != durum:
             continue
-        alanlar = []
-        if not p.get("dosya_referansi"):
-            alanlar.append("Dosya Referansı")
-        if not d.get("gumruk_mudurlugu_no"):
-            alanlar.append("Gümrük Müdürlüğü Kodu")
-        if not p.get("dth_iban"):
-            alanlar.append("DTH IBAN")
-        if not (p.get("ach_iban") or os.environ.get("DEFAULT_ACH_IBAN", "")):
-            alanlar.append("ACH IBAN")
-        if not p.get("ibkb_duzenlendi"):
-            alanlar.append("IBKB kaydı")
+        secili += 1
+        alanlar = _missing_fields(d, p)
         if alanlar:
             eksikler.append({"beyanname_no": d["beyanname_no"], "bedel": p["gonderen"],
                              "alanlar": alanlar})
-    return {"satir_sayisi": len(matches), "eksik_sayisi": len(eksikler), "eksikler": eksikler[:50]}
+    return {"satir_sayisi": secili, "eksik_sayisi": len(eksikler), "eksikler": eksikler[:50]}
 
 
 @api.get("/export/excel")
-async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
+async def export_excel(durum: str = "", match_ids: str = "", mark_sent: bool = True,
+                       user: dict = Depends(get_current_user)):
     """Bankanın istediği resmi bildirim şablonu + destek sayfaları."""
+    ids = {i for i in match_ids.split(",") if i}
     wb = Workbook()
     ws = wb.active
     ws.title = "BANKA BİLDİRİMİ"
@@ -762,6 +825,7 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
     ws.append(headers)
 
     matches = await db.matches.find({}).sort("tarih", 1).to_list(5000)
+    matches = [m for m in matches if _selected(m, ids)]
     dec_map, pay_map = await _match_maps()
     sira, toplam = 0, 0.0
     for m in matches:
@@ -842,7 +906,13 @@ async def export_excel(durum: str = "", user: dict = Depends(get_current_user)):
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    await log_action(user, "Excel", "AKTAR", "Banka bildirim Excel dosyası indirildi")
+    if mark_sent and matches:
+        now = utcnow_iso()
+        await db.matches.update_many(
+            {"_id": {"$in": [m["_id"] for m in matches]}},
+            {"$set": {"bankaya_gonderildi": True, "gonderim_tarihi": now}})
+    await log_action(user, "Excel", "AKTAR",
+                     f"Banka bildirim Excel dosyası indirildi ({sira} satır)")
     fname = f"banka_bildirim_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
     return StreamingResponse(buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -870,7 +940,7 @@ async def reports_summary(user: dict = Depends(get_current_user)):
         m["kapatilan"] = round(m["kapatilan"] + d["kapatilan"], 2)
         if d["ibkb_durum"] == "DUZENLENMEDI":
             ibkb_alinmadi += 1
-        if d["destek_durum"] == "ALINMADI":
+        if d["destek_durum"] == "ALINMADI" and not d.get("destek_kapsam_disi"):
             destek_alinmadi += 1
     return {"doviz": list(by_cur.values()),
             "ithalatci": sorted(by_imp.values(), key=lambda x: -x["adet"])[:10],
