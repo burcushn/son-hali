@@ -13,6 +13,12 @@ import {
 
 const OK = { label: "DÜZENLENDİ", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800" };
 const NOK = { label: "DÜZENLENMEDİ", cls: "bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700" };
+const DESTEK = {
+  ALINDI: { label: "ALINDI", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800" },
+  TALEP_EDILDI: { label: "TALEP EDİLDİ", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800" },
+  ALINMADI: { label: "ALINMADI", cls: "bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700" },
+  KAPSAM_DISI: { label: "KAPSAM DIŞI (TL)", cls: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800" },
+};
 
 export default function Ibkb() {
   const { user } = useAuth();
@@ -39,6 +45,11 @@ export default function Ibkb() {
       banka: p.banka,
       doviz: p.doviz,
       tutar: p.tutar,
+      kullanilan: p.kullanilan,
+      bakiye: p.bakiye,
+      destek_tutari: p.destek_tutari,
+      destek_bekleyen: p.destek_bekleyen,
+      destek_kapsam_disi: p.destek_kapsam_disi,
       zorunlu_bozdurma: p.zorunlu_bozdurma,
       ibkb_no: p.ibkb_no || "",
       ibkb_tarihi: p.ibkb_tarihi || new Date().toISOString().slice(0, 10),
@@ -46,6 +57,10 @@ export default function Ibkb() {
       dth_iban: p.dth_iban || "",
       ach_iban: p.ach_iban || p.ach_iban_default || "",
       tcmb_devir_orani: String(p.tcmb_devir_orani ?? 100),
+      destek_talep_edildi: !!p.destek_talep_edildi,
+      destek_alindi: !!p.destek_alindi,
+      tesvik: !!p.tesvik,
+      taahhut: !!p.taahhut,
     });
 
   const save = async () => {
@@ -58,6 +73,10 @@ export default function Ibkb() {
         dosya_referansi: form.dosya_referansi,
         ach_iban: form.ach_iban,
         tcmb_devir_orani: Number(form.tcmb_devir_orani || 100),
+        destek_talep_edildi: !!form.destek_talep_edildi,
+        destek_alindi: !!form.destek_alindi,
+        tesvik: !!form.tesvik,
+        taahhut: !!form.taahhut,
       });
       toast.success("IBKB bilgileri kaydedildi");
       setForm(null);
@@ -103,6 +122,8 @@ export default function Ibkb() {
               <th className="px-3 py-2.5 font-medium">DTH IBAN (döviz)</th>
               <th className="px-3 py-2.5 font-medium">ACH IBAN (TL)</th>
               <th className="px-3 py-2.5 font-medium text-right">TCMB Devir</th>
+              <th className="px-3 py-2.5 font-medium">Destek (%3)</th>
+              <th className="px-3 py-2.5 font-medium text-center">Teşvik / Taahhüt</th>
               <th className="px-3 py-2.5 font-medium">Durum</th>
               <th className="px-3 py-2.5 font-medium text-right">İşlem</th>
             </tr>
@@ -126,6 +147,24 @@ export default function Ibkb() {
                 <td className="px-3 py-2 mono text-xs">{p.ach_iban || p.ach_iban_default || "-"}</td>
                 <td className="px-3 py-2 mono text-right">%{p.tcmb_devir_orani ?? 100}</td>
                 <td className="px-3 py-2">
+                  {p.destek_kapsam_disi ? (
+                    <Badge2 cfg={DESTEK.KAPSAM_DISI} testid={`ibkb-destek-${p.id}`} />
+                  ) : (
+                    <>
+                      <div className="mono text-xs mb-1">{fmt(p.destek_tutari, p.doviz)}</div>
+                      <Badge2 cfg={DESTEK[p.destek_durum] || DESTEK.ALINMADI} testid={`ibkb-destek-${p.id}`} />
+                      {p.destek_bekleyen > 0 && (
+                        <div className="text-[11px] text-muted-foreground mt-1">
+                          açık kısım: {fmt(p.destek_bekleyen, p.doviz)}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-center mono text-xs" data-testid={`ibkb-tesvik-taahhut-${p.id}`}>
+                  {p.tesvik ? "E" : "H"} / {p.taahhut ? "E" : "H"}
+                </td>
+                <td className="px-3 py-2">
                   <Badge2 cfg={p.ibkb_durum === "DUZENLENDI" ? OK : NOK} testid={`ibkb-status-${p.id}`} />
                 </td>
                 <td className="px-3 py-2 text-right">
@@ -140,7 +179,7 @@ export default function Ibkb() {
             ))}
             {!items.length && (
               <tr>
-                <td colSpan={11} className="px-3 py-12 text-center text-sm text-muted-foreground">
+                <td colSpan={13} className="px-3 py-12 text-center text-sm text-muted-foreground">
                   Kayıt bulunamadı. Bedel girildikten sonra burada listelenir.
                 </td>
               </tr>
@@ -150,7 +189,7 @@ export default function Ibkb() {
       </div>
 
       <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
-        <DialogContent className="max-w-2xl rounded-sm" data-testid="ibkb-form-dialog">
+        <DialogContent className="max-w-2xl rounded-sm max-h-[92vh] overflow-y-auto" data-testid="ibkb-form-dialog">
           <DialogHeader>
             <DialogTitle className="font-display">IBKB Bilgileri</DialogTitle>
             {form && (
@@ -173,6 +212,59 @@ export default function Ibkb() {
                      on={(v) => setForm({ ...form, tcmb_devir_orani: v })} />
               <Field label="ACH IBAN — bozdurulan tutarın geçtiği TL hesabı" v={form.ach_iban}
                      t="ibkb-ach-iban-input" mono on={(v) => setForm({ ...form, ach_iban: v })} />
+
+              <div className="sm:col-span-2 border-t border-border pt-4 space-y-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Döviz Dönüşüm Desteği (%3) — bu bedel için
+                </div>
+                {form.destek_kapsam_disi ? (
+                  <div className="text-sm text-sky-700 dark:text-sky-300 border border-dashed border-border rounded-sm px-3 py-2">
+                    Bedel TL geldiği için döviz dönüşüm desteği kapsam dışıdır.
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                      <div className="border border-dashed border-border rounded-sm px-3 py-2">
+                        Beyannameye kullanılan kısım için destek
+                        <div className="mono font-semibold" data-testid="ibkb-destek-tutari">
+                          {fmt(form.destek_tutari, form.doviz)}
+                        </div>
+                      </div>
+                      <div className="border border-dashed border-border rounded-sm px-3 py-2 text-muted-foreground">
+                        Açık kalan kısım (henüz alınmaz)
+                        <div className="mono" data-testid="ibkb-destek-bekleyen">
+                          {fmt(form.destek_bekleyen, form.doviz)}
+                        </div>
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={!!form.destek_talep_edildi} data-testid="ibkb-destek-talep-checkbox"
+                             onChange={(e) => setForm({ ...form, destek_talep_edildi: e.target.checked })} />
+                      Destek talebi bankaya iletildi
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={!!form.destek_alindi} data-testid="ibkb-destek-alindi-checkbox"
+                             onChange={(e) => setForm({ ...form, destek_alindi: e.target.checked })} />
+                      Destek ödemesi hesaba geçti
+                    </label>
+                  </>
+                )}
+                <div className="text-xs uppercase tracking-wide text-muted-foreground pt-2">
+                  IBKB Evrakı — Teşvik / Taahhüt
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2 text-sm border border-border rounded-sm px-3 h-10">
+                    <input type="checkbox" checked={!!form.tesvik} data-testid="ibkb-tesvik-checkbox"
+                           onChange={(e) => setForm({ ...form, tesvik: e.target.checked })} />
+                    Teşvik (EVET)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm border border-border rounded-sm px-3 h-10">
+                    <input type="checkbox" checked={!!form.taahhut} data-testid="ibkb-taahhut-checkbox"
+                           onChange={(e) => setForm({ ...form, taahhut: e.target.checked })} />
+                    Taahhüt (EVET)
+                  </label>
+                </div>
+              </div>
             </div>
           )}
           <DialogFooter>

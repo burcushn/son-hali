@@ -29,6 +29,7 @@ export const fmtDateTime = (s) =>
 export const D_STATUS = {
   ACIK: { label: "AÇIK", cls: "bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-700" },
   KISMI: { label: "KISMİ KAPALI", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800" },
+  ONAY_BEKLIYOR: { label: "BANKA ONAYI BEKLİYOR", cls: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800" },
   KAPALI: { label: "KAPALI", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800" },
 };
 

@@ -24,7 +24,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from models import (
     User, UserCreate, UserUpdate, LoginInput, VerifyCodeInput, ResendCodeInput,
     Declaration, DeclarationInput, Payment, PaymentInput, IbkbInput,
-    Match, MatchInput, ROLES, ROLE_LABELS, utcnow_iso,
+    Match, MatchInput, BankApprovalInput, ROLES, ROLE_LABELS, utcnow_iso,
 )
 import tcmb
 import alerts
@@ -111,7 +111,9 @@ def declaration_view(doc: dict) -> dict:
     # İhracat bedeli TL olarak geldiyse döviz dönüşüm desteği (%3) kapsam dışıdır
     tl = bool(d.get("tl_bedel")) or d["doviz"] == "TRY"
     d["destek_kapsam_disi"] = tl
-    d["destek_tutari"] = 0.0 if tl else round(d["tutar"] * 0.03, 2)
+    # Destek (%3) yalnızca kapatılan (bedeli alınmış) kısım için hesaplanır
+    d["destek_tutari"] = 0.0 if tl else round(d["kapatilan"] * 0.03, 2)
+    d["destek_bekleyen"] = 0.0 if tl else round((d["tutar"] - d["kapatilan"]) * 0.03, 2)
     d["ibkb_durum"] = "DUZENLENDI" if d.get("ibkb_alindi") else "DUZENLENMEDI"
     if tl:
         d["destek_durum"] = "KAPSAM_DISI"
@@ -149,14 +151,29 @@ def payment_view(doc: dict) -> dict:
     p["zorunlu_bozdurma_orani"] = ZORUNLU_BOZDURMA_ORANI
     p["zorunlu_bozdurma"] = round(p["tutar"] * ZORUNLU_BOZDURMA_ORANI / 100, 2)
     p["ach_iban_default"] = _LAST_ACH.get("iban") or os.environ.get("DEFAULT_ACH_IBAN", "")
+    # Döviz dönüşüm desteği (%3): beyanname kapatmada KULLANILAN kısım üzerinden,
+    # açık kalan tutar için destek alınmaz. TL gelen bedel kapsam dışıdır.
+    tl = p["doviz"] == "TRY"
+    p["destek_kapsam_disi"] = tl
+    p["destek_tutari"] = 0.0 if tl else round(p["kullanilan"] * 0.03, 2)
+    p["destek_bekleyen"] = 0.0 if tl else round(p["bakiye"] * 0.03, 2)
+    if tl:
+        p["destek_durum"] = "KAPSAM_DISI"
+    elif p.get("destek_alindi"):
+        p["destek_durum"] = "ALINDI"
+    elif p.get("destek_talep_edildi"):
+        p["destek_durum"] = "TALEP_EDILDI"
+    else:
+        p["destek_durum"] = "ALINMADI"
     return p
 
 
-def dstatus(tutar: float, kapatilan: float) -> str:
+def dstatus(tutar: float, kapatilan: float, onay_bekleyen: bool = False) -> str:
     if kapatilan <= 0.004:
         return "ACIK"
     if kapatilan >= tutar - 0.01:
-        return "KAPALI"
+        # Bankadan imzalı evrak alınmadan beyanname kapanmış sayılmaz
+        return "ONAY_BEKLIYOR" if onay_bekleyen else "KAPALI"
     return "KISMI"
 
 
@@ -174,15 +191,31 @@ async def recalc_declaration(did: str):
     doc = await db.declarations.find_one({"_id": ObjectId(did)})
     if not doc:
         return
-    # bağlanan bedellerden biri TL ise destek (%3) kapsam dışı
-    tl = False
+    # bağlanan bedellerden biri TL ise destek (%3) kapsam dışı;
+    # IBKB durumu ve teşvik/taahhüt bilgileri de bedel (IBKB) kayıtlarından gelir
+    tl, ibkb_ok, tesvik, taahhut = False, bool(ms), False, False
+    destek_ok, destek_var = bool(ms), False
     for m in ms:
-        p = await db.payments.find_one({"_id": ObjectId(m["payment_id"])}, {"doviz": 1})
-        if p and p.get("doviz") == "TRY":
+        p = await db.payments.find_one({"_id": ObjectId(m["payment_id"])})
+        if not p:
+            continue
+        if p.get("doviz") == "TRY":
             tl = True
-            break
+        if not p.get("ibkb_duzenlendi"):
+            ibkb_ok = False
+        if p.get("doviz") != "TRY":
+            destek_var = True
+            if not p.get("destek_alindi"):
+                destek_ok = False
+        tesvik = tesvik or bool(p.get("tesvik"))
+        taahhut = taahhut or bool(p.get("taahhut"))
+    onay_bekleyen = any(not m.get("banka_onayi") for m in ms)
     await db.declarations.update_one({"_id": ObjectId(did)},
-        {"$set": {"kapatilan": total, "durum": dstatus(doc["tutar"], total), "tl_bedel": tl}})
+        {"$set": {"kapatilan": total,
+                  "durum": dstatus(doc["tutar"], total, onay_bekleyen),
+                  "tl_bedel": tl, "ibkb_alindi": ibkb_ok,
+                  "destek_alindi": bool(destek_var and destek_ok),
+                  "tesvik": tesvik, "taahhut": taahhut}})
 
 
 async def recalc_payment(pid: str):
@@ -373,6 +406,10 @@ async def list_declarations(durum: str = "", q: str = "", sure: str = "",
         items = [i for i in items if i["ibkb_durum"] == ibkb]
     if destek:
         items = [i for i in items if i["destek_durum"] == destek]
+    # Kapanmayanlar üstte: ACIK/KISMI → ONAY_BEKLIYOR → KAPALI; süresi az kalan önce
+    order = {"ACIK": 0, "KISMI": 0, "ONAY_BEKLIYOR": 1, "KAPALI": 2}
+    items.sort(key=lambda i: (order.get(i["durum"], 0),
+                              i["kalan_gun"] if i["kalan_gun"] is not None else 99999))
     return items
 
 
@@ -398,8 +435,8 @@ async def update_declaration(did: str, body: DeclarationInput, user: dict = Depe
     if body.tutar < doc.get("kapatilan", 0) - 0.01:
         raise HTTPException(status_code=400, detail="Yeni tutar, kapatılan tutardan küçük olamaz")
     upd = body.model_dump()
-    await db.declarations.update_one({"_id": ObjectId(did)},
-        {"$set": {**upd, "durum": dstatus(body.tutar, doc.get("kapatilan", 0))}})
+    await db.declarations.update_one({"_id": ObjectId(did)}, {"$set": upd})
+    await recalc_declaration(did)
     await log_action(user, "Beyanname", "GUNCELLE", f"{body.beyanname_no} güncellendi", did)
     return declaration_view(await db.declarations.find_one({"_id": ObjectId(did)}))
 
@@ -433,6 +470,9 @@ async def list_payments(durum: str = "", q: str = "", only_available: bool = Fal
     if ibkb_only:
         # IBKB düzenlenmemiş bedel bankaya bildirilemez (dosya referansı da oluşmaz)
         items = [i for i in items if i.get("ibkb_duzenlendi")]
+    # IBKB düzenlenmemiş bedeller üstte
+    items.sort(key=lambda i: (1 if i.get("ibkb_duzenlendi") else 0, i.get("tarih", "")), reverse=True)
+    items.sort(key=lambda i: 1 if i.get("ibkb_duzenlendi") else 0)
     return items
 
 
@@ -479,6 +519,8 @@ async def update_ibkb(pid: str, body: IbkbInput, user: dict = Depends(require("b
     if upd.get("ach_iban"):
         _LAST_ACH["iban"] = upd["ach_iban"]
     await db.payments.update_one({"_id": ObjectId(pid)}, {"$set": upd})
+    for m in await db.matches.find({"payment_id": pid}).to_list(500):
+        await recalc_declaration(m["declaration_id"])
     await log_action(user, "IBKB", "GUNCELLE",
         f"{p['gonderen']} bedeli için IBKB bilgileri kaydedildi "
         f"(IBKB No: {body.ibkb_no or '-'}, Dosya Ref: {body.dosya_referansi or '-'})", pid)
@@ -573,6 +615,24 @@ async def update_match(mid: str, kapatilan_tutar: float, user: dict = Depends(re
     await log_action(user, "Eşleştirme", "GUNCELLE",
         f"{d['beyanname_no']} eşleştirmesi {kapatilan_tutar:,.2f} {d['doviz']} olarak güncellendi", mid)
     return {"ok": True}
+
+
+@api.put("/matches/{mid}/banka-onay")
+async def match_bank_approval(mid: str, body: BankApprovalInput,
+                              user: dict = Depends(require("onaylayan", "banka"))):
+    """Bankadan imzalı evrak alındığında işaretlenir; alınmadan beyanname KAPALI olmaz."""
+    m = await db.matches.find_one({"_id": ObjectId(mid)})
+    if not m:
+        raise HTTPException(status_code=404, detail="Eşleştirme bulunamadı")
+    tarih = (body.banka_onay_tarihi or datetime.now().strftime("%Y-%m-%d")) if body.banka_onayi else ""
+    await db.matches.update_one({"_id": ObjectId(mid)},
+        {"$set": {"banka_onayi": body.banka_onayi, "banka_onay_tarihi": tarih}})
+    await recalc_declaration(m["declaration_id"])
+    d = await db.declarations.find_one({"_id": ObjectId(m["declaration_id"])})
+    await log_action(user, "Eşleştirme", "BANKA_ONAYI",
+        f"{d.get('beyanname_no','')} eşleştirmesi için banka imzalı evrakı "
+        f"{'alındı' if body.banka_onayi else 'geri alındı'}", mid)
+    return {"ok": True, "banka_onayi": body.banka_onayi, "banka_onay_tarihi": tarih}
 
 
 @api.delete("/matches/{mid}")
@@ -775,6 +835,7 @@ async def export_rows(user: dict = Depends(get_current_user)):
             "doviz": d["doviz"],
             "gonderildi": bool(m.get("bankaya_gonderildi")),
             "gonderim_tarihi": m.get("gonderim_tarihi", ""),
+            "banka_onayi": bool(m.get("banka_onayi")),
             "eksikler": alanlar,
         })
     return out
@@ -859,8 +920,8 @@ async def export_excel(durum: str = "", match_ids: str = "", mark_sent: bool = T
             p.get("dth_iban", ""),
             p.get("ach_iban") or os.environ.get("DEFAULT_ACH_IBAN", ""),
             f"%{p.get('tcmb_devir_orani', 100):g}",
-            "E" if d.get("tesvik") else "H",
-            "E" if d.get("taahhut") else "H",
+            "E" if p.get("tesvik") else "H",
+            "E" if p.get("taahhut") else "H",
         ])
     row = sira + 2
     ws.cell(row=row, column=1, value="TOPLAM").font = Font(bold=True)
@@ -895,7 +956,7 @@ async def export_excel(durum: str = "", match_ids: str = "", mark_sent: bool = T
     ws2 = wb.create_sheet("Eşleştirme Detayı")
     h2 = ["Beyanname No", "Bedel Gönderen", "Banka", "IBKB No", "Dosya Referansı", "Bedel Tarihi",
           "Bedel Dövizi", "Kullanılan Bedel", "DTH IBAN", "ACH IBAN", "TCMB Devir Oranı",
-          "Teşvik", "Taahhüt", "Kur", "Kur Kaynağı",
+          "Teşvik", "Taahhüt", "Banka Onayı", "Onay Tarihi", "Kur", "Kur Kaynağı",
           "Kapatılan (Beyanname Dövizi)", "Beyanname Dövizi", "İşlem Tarihi", "İşlemi Yapan"]
     ws2.append(h2)
     for m in matches:
@@ -908,8 +969,10 @@ async def export_excel(durum: str = "", match_ids: str = "", mark_sent: bool = T
                     m["bedel_kullanilan"], p.get("dth_iban", ""),
                     p.get("ach_iban") or os.environ.get("DEFAULT_ACH_IBAN", ""),
                     f"%{p.get('tcmb_devir_orani', 100):g}",
-                    "E" if d.get("tesvik") else "H",
-                    "E" if d.get("taahhut") else "H",
+                    "E" if p.get("tesvik") else "H",
+                    "E" if p.get("taahhut") else "H",
+                    "ALINDI" if m.get("banka_onayi") else "BEKLİYOR",
+                    _tr_date(m.get("banka_onay_tarihi", "")) if m.get("banka_onay_tarihi") else "",
                     m["kur"], m.get("kur_kaynak", ""), m["kapatilan_tutar"],
                     d["doviz"], m["tarih"][:19].replace("T", " "), m.get("kullanici_ad", "")])
     _style(ws2, len(h2))

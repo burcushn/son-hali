@@ -118,7 +118,7 @@ export default function Declarations() {
             data-testid="declaration-search"
           />
         </div>
-        {[["", "Tümü"], ["ACIK", "Açık"], ["KISMI", "Kısmi"], ["KAPALI", "Kapalı"]].map(([v, l]) => (
+        {[["", "Tümü"], ["ACIK", "Açık"], ["KISMI", "Kısmi"], ["ONAY_BEKLIYOR", "Banka Onayı Bekliyor"], ["KAPALI", "Kapalı"]].map(([v, l]) => (
           <Button key={v} variant={durum === v ? "default" : "outline"} className="rounded-sm"
                   data-testid={`filter-durum-${v || "all"}`} onClick={() => setDurum(v)}>
             {l}
@@ -159,7 +159,7 @@ export default function Declarations() {
           </thead>
           <tbody data-testid="declarations-table">
             {items.map((d) => (
-              <tr key={d.id} className="border-t border-border hover:bg-secondary/50 transition-colors duration-200">
+              <tr key={d.id} className={`border-t border-border hover:bg-secondary/50 transition-colors duration-200 ${d.durum === "KAPALI" ? "opacity-60" : ""}`}>
                 <td className="px-3 py-2 mono text-xs font-medium">{d.beyanname_no}</td>
                 <td className="px-3 py-2 mono text-xs">
                   {fmtDate(d.acilis_tarihi)}
@@ -171,7 +171,7 @@ export default function Declarations() {
                   {fmtDate(d.son_kapatma_tarihi)}
                   {d.kalan_gun != null && d.durum !== "KAPALI" && (
                     <div className={d.kalan_gun < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}>
-                      {d.kalan_gun} gün
+                      {d.kalan_gun < 0 ? `${Math.abs(d.kalan_gun)} gün gecikti` : `${d.kalan_gun} gün kaldı`}
                     </div>
                   )}
                 </td>
@@ -196,6 +196,11 @@ export default function Declarations() {
                     <>
                       <div className="mono text-xs mb-1">{fmt(d.destek_tutari, d.doviz)}</div>
                       <Badge2 cfg={d.destek_durum === "ALINDI" ? OK : NOK} testid={`declaration-destek-${d.id}`} />
+                      {d.destek_bekleyen > 0 && (
+                        <div className="text-[11px] text-muted-foreground mt-1">
+                          açık kısım: {fmt(d.destek_bekleyen, d.doviz)}
+                        </div>
+                      )}
                     </>
                   )}
                 </td>
@@ -223,7 +228,16 @@ export default function Declarations() {
             {!items.length && (
               <tr>
                 <td colSpan={11} className="px-3 py-12 text-center text-sm text-muted-foreground">
-                  Kayıt bulunamadı.
+                  {durum || q || sure || ibkb || destek
+                    ? "Bu filtreye uyan kayıt bulunamadı."
+                    : "Kayıt bulunamadı."}
+                </td>
+              </tr>
+            )}
+            {!!items.length && !items.some((d) => d.durum !== "KAPALI") && (
+              <tr>
+                <td colSpan={11} className="px-3 py-3 text-center text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/30">
+                  Kapatılacak beyanname kalmadı — listedeki tüm beyannameler kapalı.
                 </td>
               </tr>
             )}
@@ -272,26 +286,14 @@ export default function Declarations() {
                      data-testid="declaration-support-amount">
                   {fmt((Number(form.tutar) || 0) * 0.03, form.doviz)}
                 </div>
+                <div className="text-[11px] text-muted-foreground">
+                  Tamamı kapatıldığında oluşacak tutar. Destek her bedel için IBKB ekranında takip edilir.
+                </div>
               </div>
-              <label className="flex items-center gap-2 text-sm border border-border rounded-sm px-3 h-10">
-                <input type="checkbox" checked={!!form.ibkb_alindi} data-testid="declaration-ibkb-checkbox"
-                       onChange={(e) => setForm({ ...form, ibkb_alindi: e.target.checked })} />
-                IBKB belgesi düzenlendi
-              </label>
-              <label className="flex items-center gap-2 text-sm border border-border rounded-sm px-3 h-10">
-                <input type="checkbox" checked={!!form.destek_alindi} data-testid="declaration-destek-checkbox"
-                       onChange={(e) => setForm({ ...form, destek_alindi: e.target.checked })} />
-                Destek ödemesi alındı
-              </label>
-              <label className="flex items-center gap-2 text-sm border border-border rounded-sm px-3 h-10">
-                <input type="checkbox" checked={!!form.tesvik} data-testid="declaration-tesvik-checkbox"
-                       onChange={(e) => setForm({ ...form, tesvik: e.target.checked })} />
-                Teşvik (EVET)
-              </label>
-              <label className="flex items-center gap-2 text-sm border border-border rounded-sm px-3 h-10">
-                <input type="checkbox" checked={!!form.taahhut} data-testid="declaration-taahhut-checkbox"
-                       onChange={(e) => setForm({ ...form, taahhut: e.target.checked })} />
-                Taahhüt (EVET)
+              <label className="flex items-center gap-2 text-sm border border-dashed border-border rounded-sm px-3 h-10 text-muted-foreground">
+                <input type="checkbox" checked={!!form.destek_alindi} disabled
+                       data-testid="declaration-destek-checkbox" />
+                Destek ödemesi — IBKB ekranından takip edilir
               </label>
               <div className="sm:col-span-2 space-y-1.5">
                 <Label className="text-xs uppercase tracking-wide">Notlar</Label>

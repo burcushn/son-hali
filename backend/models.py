@@ -147,6 +147,11 @@ class Payment(BaseDocument):
     ibkb_tarihi: str = ""
     dosya_referansi: str = ""
     tcmb_devir_orani: float = 100.0
+    # Döviz dönüşüm desteği (%3) ve teşvik/taahhüt her bedel için ayrı takip edilir
+    destek_talep_edildi: bool = False
+    destek_alindi: bool = False
+    tesvik: bool = False
+    taahhut: bool = False
     created_at: str = Field(default_factory=utcnow_iso)
     created_by: str = ""
 
@@ -158,6 +163,15 @@ class IbkbInput(BaseModel):
     dosya_referansi: str = ""
     ach_iban: Optional[str] = None
     tcmb_devir_orani: float = 100.0
+    destek_talep_edildi: bool = False
+    destek_alindi: bool = False
+    tesvik: bool = False
+    taahhut: bool = False
+
+
+class BankApprovalInput(BaseModel):
+    banka_onayi: bool = True
+    banka_onay_tarihi: Optional[str] = None
 
 
 class MatchInput(BaseModel):
@@ -174,6 +188,11 @@ class Match(BaseDocument):
     bedel_kullanilan: float
     kur: float
     kur_kaynak: str = "TCMB"
+    # Banka imzalı evrakı alınmadan beyanname KAPALI sayılmaz
+    banka_onayi: bool = False
+    banka_onay_tarihi: str = ""
+    bankaya_gonderildi: bool = False
+    gonderim_tarihi: str = ""
     tarih: str = Field(default_factory=utcnow_iso)
     kullanici: str = ""
     kullanici_ad: str = ""
